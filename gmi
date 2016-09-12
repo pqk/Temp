@@ -1,0 +1,716 @@
+/*sf_kab_redux*/
+options mlogic mprint symbolgen mcompilenote=all; /*debugging ON*/
+options nomlogic nomprint nosymbolgen mcompilenote=none; /*debugging OFF*/
+
+libname Kabarai "~/Kabarai";
+libname master	"/share/world/master";
+
+%include "/odd/lib/sf-dwh.key";
+
+
+/*%%%%%%%%%% CP Manual Update %%%%%%%%%%*/
+
+%let s_cut = 133 ;  	/*YYMM133 1101  CHANGE*/
+%let e_cut = 197 ;		/*YYMM197 1605  CHANGE*/
+
+/*** Initial Date ***/
+%let ST='01jan2000'd; 	/*Note: '01jan2000'd --> s_cut=1*/
+       
+data _null_;		/*n= months elapsed from s_cut=1 to today() nはs_cut=1～本日の間の経過月数*/
+        call symput ("n",intck("month",&ST-1,intnx('day',intnx('month',today(),0),-1))) ;
+run;
+
+/***** Check *****/
+%put %nrstr(&n =) &n;
+data _null_;	/*creates monthly macvar series from '01jan2000'd to today()*/
+	%macro YM1;
+		%do i= 0 %to &n ;
+			call symput("yymm&i" ,put(intnx("month",&ST-1,%eval(&i),"end"),yymmdd4.));
+		%end;
+	%mend YM1;
+	%YM1 ;
+run;
+
+%macro YM2 ; /*output to log all yymm&i macvar*/
+	%do i= 0 %to &n ;
+		%put yymm&i = &&yymm&i;
+	%end ;
+%mend YM2;
+%YM2 ;
+/*%%%%%%*/
+
+/*Create SAS dataset from aggregated version of all kabarai monthly data*/
+data Kabarai.ALL_Kabarai;
+infile "~/Kabarai/ALL_Kabarai.csv" dlm=',' DSD missover firstobs=2;
+input Date :yymmdd10.
+	  Month :best32. 
+	  No :best32.
+	  Serialno :best32.
+	  Wakaibi :best32.
+	  Maxirrl :best32.
+	  Seikyu :best32.
+	  Kosyo :best32.
+	  kekka :best32.
+	  Status :$8.;
+format Date yymmdd10. Wakai_Date yymmdd10.;
+*Status=substr(Status,1,length(Status)-1);
+Wakai_date=mdy(substr(strip(Wakaibi),5,2),substr(strip(Wakaibi),7,2),substr(strip(wakaibi),1,4));
+run;
+
+proc sort data=Kabarai.ALL_Kabarai presorted; by serialno;run;
+
+
+/*********** WORKAROUND1: create file in specified libref to work w/ oralib data offline*/
+/* 介入 DB より、介入日を特定 */
+proc sql;
+	create table Kabarai.LI as
+	select t1.*
+	from oralib.TBN_SBSHKREC as t1;		/* 情介入DB */
+quit;
+
+data Kabarai.LI;
+	set Kabarai.LI(rename=(
+			_COL0 = no
+			_COL1 = serialno
+			_COL2 = shop	/*店番*/
+			_COL3 = l_no	/*弁護士番号*/
+			_COL4 = l_in_date	/*弁護士介入年月日*/
+			_COL5 = l_out_date	/*弁護士辞任年月日*/
+			_COL6 = s_no	/*司法書士番号*/
+			_COL7 = s_in_date	/*司法書士介入年月日*/
+			_COL8 = s_out_date));	/*司法書士辞任年月日*/
+run;
+
+proc datasets lib=Kabarai;
+modify LI; 
+attrib _all_ label='';run;
+
+proc sort data=Kabarai.LI presorted; by serialno;run;
+
+/************ WORKAROUND1 END ************/
+
+
+/********** Deal w/ DNE cases **********/     /*MUST RUN EVERYMONTH*/
+
+data Wakai_LI1 DNE(keep=serialno Wakai_Date); 
+merge Kabarai.ALL_Kabarai(in=t1) 
+	  Kabarai.LI(in=t2 keep=serialno l_no l_in_date s_no s_in_date);
+by serialno;
+if t1 then output Wakai_LI1;
+if l_no=. then output DNE; /*Wakai'd but no LI date*/
+run;
+
+%macro CUST_prep; 
+
+%do i = &e_cut %to 133 %by -1; /*CHANGE*/  /*possible hash tag candidate*/
+ 
+	 proc sql;
+	 create table kabarai.cust_DNE&&yymm&i(drop=Wakai_date) as
+	 select *
+	 from 	DNE as t1 left join 
+			master.cust_master&&yymm&i(keep=serialno c188 c189 c190 c191 c192 c193 c194 c195 c196 c197) /*社メ2(1-4) 社メ2登録日(1-4)*/
+	 as t2 on t1.serialno=t2.serialno
+	 order by serialno;quit;
+
+%end;
+
+%mend CUST_prep;
+
+%CUST_prep
+
+/**********  **********/
+
+proc sort data=DNE presorted; by serialno;run;
+
+/********** Account for RP **********/
+%macro DNE;
+%do i = &e_cut %to &s_cut %by -1; /*Use same &e_cut &s_cut as above*/
+
+	%if &i = &e_cut /*or &e_cut=&s_cut*/ %then %do;
+		data DNE_Comp(drop=j);
+		merge DNE(in=t1) 
+			  kabarai.cust_DNE&&yymm&i(keep=serialno c188 c189 c190 c191 c192 c193 c194 c195 c196 c197
+								  rename=(c188=SM1 c189=SM2 c190=SM3 c191=SM4 c192=SM5
+										  c193=SMD1 c194=SMD2 c195=SMD3 c196=SMD4 c197=SMD5));
+		by serialno;
+		if t1;
+		label Serialno= SM1= SM2= SM3= SM4= SM5= SMD1= SMD2= SMD3= SMD4= SMD5=;
+
+		array SM{*} SM1 - SM5;
+		array SMD{*} SMD1 - SMD5;
+		do j=1 to dim(sm);
+			if	sm(j)=806 then do;
+			RP_Date=SMD(j);
+			RP_YYMM=&&yymm&i;end;
+		end;
+		format RP_Date yymmdd10.;
+		run;
+	%end;
+
+	%else %do;
+		data DNE_Comp(drop=j);
+		merge DNE_Comp(in=t1) 
+			  kabarai.cust_DNE&&yymm&i(keep=serialno c188 c189 c190 c191 c192 c193 c194 c195 c196 c197
+								  rename=(c188=SM1 c189=SM2 c190=SM3 c191=SM4 c192=SM5
+										  c193=SMD1 c194=SMD2 c195=SMD3 c196=SMD4 c197=SMD5));
+		by serialno;
+		if t1;
+		label Serialno= SM1= SM2= SM3= SM4= SM5= SMD1= SMD2= SMD3= SMD4= SMD5=;
+
+		array SM{*} SM1 - SM5;
+		array SMD{*} SMD1 - SMD5;
+		do j=1 to dim(sm);
+			if	sm(j)=806 and RP_Date=. then do;
+			RP_Date=SMD(j);
+			RP_YYMM=&&yymm&i;end;
+		end;
+		run;
+	%end;
+
+%end;
+%mend DNE;
+
+%dne
+
+data Wakai_LI2;
+merge Wakai_LI1(in=t1)
+	  DNE_COMP(keep=serialno RP_Date);
+by serialno;
+run;
+
+/********** END RP **********/
+
+
+data Wakai_LI3 
+(keep=Serialno maxirrl seikyu kosyo kekka status wakai_date li_date1 Wakai_LI_Gap Gap_Type Wakai_YYMM LI_YYMM);	
+	set Wakai_LI2;	
+	
+format li_date yymmdd10.; /* CLAIMS method*/
+		if l_no ne 0 and s_no ne 0 then do;	/* 両方入ってる */
+			if datepart(l_in_date) <= datepart(s_in_date) then do;
+				agent_no = compress("L" || l_no);
+				li_date = datepart(l_in_date);
+			end;
+			else do;
+				agent_no = compress("S" || s_no);
+				li_date = datepart(s_in_date);
+			end;
+		end;
+		else if l_no ne 0 then do;		/* 弁護士 */
+				agent_no = compress("L" || l_no);
+				li_date = datepart(l_in_date);
+		end;
+		else if s_no ne 0 then do;		/* 司法書士 */
+				agent_no = compress("S" || s_no);
+				li_date = datepart(s_in_date);
+		end;
+
+format li_date1 yymmdd10.; /* GENGAKU method*/
+if l_no ne 0 and s_no ne 0 then do;
+	if intck("day",l_in_date,Wakai_Date)<intck("day",s_in_date,Wakai_Date) then do;
+		li_date1 = datepart(l_in_date);
+		end;
+		else do;
+		li_date1 = datepart(s_in_date);
+	end;
+end;
+else if l_no ne 0 then li_date1 = datepart(l_in_date);
+else if s_no ne 0 then li_date1 = datepart(s_in_date);
+
+if l_no=. and RP_Date~=. then li_date1=RP_Date;/*DNE items w/ SM=806 >>Right Party*/
+*test=intck("month",Date,li_date);
+*test1=intck("month",Date,li_date1);
+Wakai_LI_Gap=intck("month",Date,li_date1);
+if Wakai_LI_Gap>=-24 and Wakai_LI_Gap<=0 then Gap_Type="0-2yrs";
+else if  Wakai_LI_Gap<-24 then Gap_Type="<2yrs";
+else if  Wakai_LI_Gap>0 then Gap_Type=">0yrs";
+
+if l_no=. and RP_Date=. then Gap_Type="Null";
+
+label serialno=;
+
+Wakai_YYMM=input(strip(put(Wakai_Date,yymmn4.)),4.);
+LI_YYMM=input(strip(put(li_date1,yymmn4.)),4.);
+run;
+/* === END 介入日を特定 === */
+
+
+%let s_cut = 1 ;  /*YYMM1	0001*/
+%let e_cut = &e_cut;
+
+%macro gngk_kouho;  
+
+%do i = &s_cut %to &e_cut %by 1;
+	proc sql;
+	create table kabarai.kouho_&&yymm&i as
+	select serialno,&&yymm&i as GNGK_YYMM,sum(RE&&yymm&i..16) as GNPN_GNGK
+	from risklib.redu&&yymm&i as t1
+	group by serialno
+	order by serialno;quit;
+
+	data kabarai.kouho_&&yymm&i(keep=serialno GNGK_YYMM GNPN_GNGK); 
+	merge kabarai.kouho_&&yymm&i(in=t1)
+		  Wakai_LI3(in=t2);
+	by serialno;
+	if t1 and t2;
+	*if (LI_YYMM<=GNGK_YYMM and GNGK_YYMM<=Wakai_YYMM) or Gap_Type=">0yrs";/*excl. customers w/ gengaku before LI and incld. any potential 2nd kabarai*/
+	run;
+
+	proc sort data=kabarai.kouho_&&yymm&i nodup;/*eliminate dups that occur due to merge w/ Settlement Flash data*/
+	by serialno;run;
+
+	%if &i = &s_cut %then %do; 
+		proc transpose data=kabarai.kouho_&&yymm&i out=kouho_&&yymm&i..t(drop=_NAME_);
+		by serialno;
+		var GNPN_GNGK;
+		id GNGK_YYMM;run;
+		proc sort data=kouho_&&yymm&i..t;by serialno;run;
+
+		data Kouho_ALL;
+		set kouho_&&yymm&i..t;
+		if serialno=. then delete;run;
+
+		proc sql;drop table kouho_&&yymm&i..t;quit;
+	%end;
+
+	%else %do;
+		proc transpose data=kabarai.kouho_&&yymm&i out=kouho_&&yymm&i..t(drop=_NAME_);
+		by serialno;
+		var GNPN_GNGK;
+		id GNGK_YYMM;run;
+		proc sort data=kouho_&&yymm&i..t;by serialno;run;
+
+		data Kouho_ALL;
+		merge Kouho_ALL kouho_&&yymm&i..t;
+		by serialno;
+		if serialno=. then delete;run;
+
+		proc sql;drop table kouho_&&yymm&i..t;quit;
+		run;
+	%end;
+
+%end;
+
+%mend gngk_kouho;
+
+%gngk_kouho
+
+
+/****Create dataset and subsequent macvars for use in below arrays****/
+data Temp1(keep=Elements);
+set Kouho_ALL(drop=serialno);
+Length Elements $5;
+array trnp(*) _numeric_;
+do i=1 to dim(trnp);
+	if _n_=1 then do;
+	Elements=vname(trnp[i]);
+	output;
+	end;
+end;
+run;
+
+proc sql noprint;
+select count(elements) format 3. INTO:Obs
+from Temp1;quit;
+
+proc sql noprint;
+select Elements INTO :Mo1 - :Mo999
+from Temp1;
+drop table Temp1; quit;
+
+%put &mo1 &&Mo&obs;
+
+%let ObsLess1=%eval(&obs-1);
+
+%put &mo1 &&Mo&obs &ObsLess1;
+/********/
+
+/*Find date of first gengaku and sum incld. subsequent torikeshi*/
+data Gengaku(keep=serialno GNGK_Sum GNGK_YYMM);
+set Kouho_ALL;
+Length GNGK_YYMM $5.;
+
+array gngk{*} &mo1 -- &&Mo&obs;
+if sum(of gngk[*])=0 then delete;
+do i=1 to dim(gngk);
+	if gngk(i)=. or (gngk(i)>=0 and gngk(i)<10000) then gngk(i)=0;/*0<gngk<10000 are adjustments or non-kabarai gengaku*/
+	end;
+GNGK_Sum=sum(of gngk[*]);
+
+array comp{&ObsLess1} _temporary_;
+do j=1 to dim(comp);
+if gngk(j)<gngk(j+1) or gngk(j)>gngk(j+1) then do;
+	GNGK_YYMM=strip(vname(of gngk[j+1]));
+	output;
+	leave;
+	end;
+end;
+run;
+
+data Gengaku(rename=(temp=GNGK_YYMM));
+set Gengaku(where=(GNGK_Sum>0));	/*excl. all but positive values >>i.e., only gengaku loss*/
+Temp=input(substr(GNGK_YYMM,2,length(GNGK_YYMM)-1),4.);
+drop GNGK_YYMM;
+run;
+/***********/
+
+
+/********** OUTPUT & SUMMARIZE DATA **********/
+data Temp Wakai_LI4(drop=GNGK_Temp);
+merge Wakai_LI3(in=t1) Gengaku;
+by serialno;
+if t1;
+
+if first.serialno then Dup=1;  /*重複口座を特定*/
+else Dup +1;
+
+if not missing(GNGK_YYMM) and GNGK_YYMM<LI_YYMM then Credit_Wakai=1; /*介入年月より早い時期に減額した場合はクレジット和解としてカウント*/
+else Credit_Wakai=0;
+
+GNGK_LI_GAP=GNGK_YYMM-LI_YYMM;
+
+if not missing(GNGK_YYMM) and Wakai_YYMM=GNGK_YYMM then Same_Month=1;
+else Same_Month=0;
+
+if Credit_Wakai=1 then GNGK_Temp=0;
+else GNGK_Temp=GNGK_Sum;
+run;
+
+proc export data=Wakai_LI4
+outfile="~/Kabarai/Wakai_&&yymm&e_cut...csv"
+dbms=csv replace;run;
+
+data kabarai.Wakai_&&yymm&e_cut;
+set Wakai_LI4;
+run;
+
+	
+proc sql;
+create table Sum_Wakai_&&yymm&e_cut as
+select t1.Wakai_YYMM,t1.Status,
+	count(serialno) as CNT,
+	t2.GNGK_CNT,
+	sum(seikyu) as Seikyu_Sum,
+	sum(Maxirrl) as Maxirrl_Sum,
+	sum(Kosyo) as Kosyo_Sum,
+	sum(Kekka) as Kekka_Sum,
+	sum(kekka-Kosyo) as Payout_Sum,
+	sum(GNGK_Temp) as GNGK_Sum
+from Temp as t1 left join (select Wakai_YYMM,Status,
+							count(serialno) as GNGK_CNT
+							from Temp
+							where Credit_Wakai=0 and not missing(GNGK_Sum)
+							group by Wakai_YYMM,Status) as t2 
+			on t1.Wakai_YYMM=t2.Wakai_YYMM and t1.Status=t2.status
+group by t1.Wakai_YYMM,t1.Status;
+quit;
+
+
+proc export data=Sum_Wakai_&&yymm&e_cut
+outfile="~/Kabarai/Sum_Wakai_&&yymm&e_cut...csv"
+dbms=csv replace;run;
+
+
+data kabarai.Sum_Wakai_&&yymm&e_cut;
+set Sum_Wakai_&&yymm&e_cut;
+run;
+
+
+/*** END MARKER ***/
+options nonumber;
+data z;z="END OF LINE";run;
+title "END OF LINE";
+proc print data=z noobs;run;
+title;
+options number;
+/****************/
+
+  
+  
+  
+  
+/** EDA **/
+
+proc sql;
+create table Sum_Wakai_temp as
+select Wakai_YYMM,Status,
+	count(serialno) as GNGK_CNT
+from Temp
+where Credit_Wakai=0 and not missing(GNGK_Sum)
+group by Wakai_YYMM,Status;
+quit;
+
+
+data a;
+set temp;
+if missing(GNGK_Sum) then test="Missing";
+else if GNGK_Sum>0 then test=">0";
+else if GNGK_Sum<0 then test="<0";
+else if GNGK_Sum=0 then test="=0";
+run;
+
+proc freq data=a;
+tables Wakai_YYMM*test /norow nocol nopercent;
+where Credit_Wakai=0;
+run;
+
+
+
+
+
+
+
+
+proc sort data=wakai_li4 out=a;by serialno;run;
+
+data a;
+set a;
+by serialno;
+
+
+run;
+
+proc freq
+tables Wakai_YYMM*Status / norow nocol nopercent;
+
+
+
+ and last.serialno=0 then Dups=1;
+else Dups=0;
+run;
+
+
+*%let i=2;
+*proc sql;
+*create table Gengaku1(drop=serialno GNGK_Sum) as
+*select *,monotonic() as Num
+*from Gengaku
+*having Num=&i;*quit;
+
+
+*data aq(drop=serialno GNGK_Sum);
+*set aa;
+*Num=_n_;
+*if Num=&i;
+*run;
+
+
+array gngk1{*} _3 -- _1410;
+array gngk_1st{139};/*for later_&&yymm&e_cut -- &&yymm&s_cut;*/
+do j=1 to 139;
+*gngk_1st{j}=gngk1(i)+gngk1(i+1);
+if gngk1(j)=0 and (gngk1(j+1)>0 or gngk1(j+1)<0) then gngk_1st{j}=gngk1(j+1);
+
+*if gngk_1st{j}=gngk(i+1) and gngk_1st{j}=GNGK_Sum then gngk_1st=gngk(i+1);
+
+*if gngk(i)=0 and (gngk(i+1)>0 or gngk(i+1)<0) then gngk_1st{j}=gngk(i+1);
+end;
+
+run;
+
+
+ proc export data=Kouho_ALL
+ outfile="~/Kouho_ALL.csv"
+ dbms=csv replace;run;
+
+
+
+proc report data=kouho_all out=aa;
+var _1409 -- _1410;
+run;
+
+proc transpose data=kabarai.kouho_1106 out=kouho_1106t(drop=_NAME_) otra;
+by serialno;
+var GNPN_GNGK;
+id GNGK_YYMM;run;
+proc sort data=kouho_1106t;by serialno;run;
+
+/*good code but takes to long to run*//*
+%let i =178;
+
+proc sql;
+create table redu as
+select serialno,&&yymm&i as GNGK_YYMM,sum(RE&&yymm&i..16) as GNPN_GNGK
+from risklib.redu&&yymm&i as t1
+where EXISTS(select serialno from Wakai_LI3 as t2 
+			 where t1.serialno=t2.serialno and &&yymm&i>=t2.LI_YYMM and &&yymm&i<=t2.Wakai_YYMM)
+group by serialno
+order by serialno;quit;
+*/
+
+
+proc sql
+create table aa as
+select t1.*
+from Wakai_LI3 as t1 left join redu as t2 on t1.serialno
+
+
+/*max(RE&&yymm&i..01) as GNGK_YYMM*/
+
+/*---------------Exploratory------------------------*/
+
+
+proc sort data=redu out=redux; by GNPN_GNGK;
+where GNPN_GNGK<0;
+run;
+
+proc sort data=redux;by serialno;run;
+proc sort data=risklib.redu1410 out=redu1410;by serialno;run;
+data redout;
+merge redu1410(in=t1)
+      redux;
+by serialno;
+run;
+proc sort data=redu out=redux; by GNPN_GNGK;
+
+proc sql;
+create table testy as
+select count(distinct serialno) as Distinct,count(serialno) as CNT
+from risklib.redu1410;quit;
+
+proc sort data=wakai_li3 out=testor;by Wakai_LI_Gap;run;
+
+proc sql;
+create table test3 as
+select Gap_Type,count(Gap_Type) as CNT
+from wakai_li3 
+group by Gap_Type
+order by Gap_Type;quit;
+
+
+
+proc sort data=dne_comp out=testo;by RP_YYMM;run;
+data testo;
+set testo;
+label Serialno= SM1= SM2= SM3= SM4= SM5= SMD1= SMD2= SMD3= SMD4= SMD5=;
+run;
+
+proc sql;
+create table test3 as
+select Gap_Type,count(Gap_Type) as CNT
+from test1
+group by Gap_Type
+order by Gap_Type;quit;
+
+
+proc sql;
+create table test2 as
+select Test2,count(test2) as CNT
+from test1
+group by test2
+order by test2;quit;
+
+
+
+proc sort data=testout;by  l_no;run;
+
+
+
+
+data aa(keep= LI_YYMM GNGK_YYMM Wakai_YYMM Test);
+set kouho_1410;
+if LI_YYMM<=GNGK_YYMM and GNGK_YYMM<=Wakai_YYMM then Test=1;
+else Test=0;
+run;
+
+data ab;
+g=1410;
+w=1410;
+l=.;run;
+
+
+data ab;
+set ab;
+if l<=g then Test=1;
+run;
+
+
+
+proc sort data=aa;by test;run;
+
+ proc export data=DNE
+ outfile="~/DNE.csv"
+ dbms=csv replace;run;
+ 
+ /*grp jimusho*/
+ /*Import Data*/
+libname home "~/";
+
+/*SF*/
+data WORK.SF_JIMUSHO;
+infile '~/SF_Jimusho.csv' delimiter = ',' MISSOVER DSD lrecl=32767 firstobs=2;
+informat SF_Jimusho $60. Jimusho $60. 
+	SF_NL_Num best32. SF_NL_IRRL best32. SF_NL_Henkan best32. SF_NL_Disc best32.
+	SF_L_Num best32. SF_L_IRRL best32. SF_L_Henkan best32. SF_L_Disc best32.
+	SF_TTL_Num best32. SF_TTL_IRRL best32. SF_TTL_Henkan best32. SF_TTL_Disc best32.;
+input SF_Jimusho $ Jimusho $
+	SF_NL_Num SF_NL_IRRL SF_NL_Henkan SF_NL_Disc
+	SF_L_Num SF_L_IRRL SF_L_Henkan SF_L_Disc
+	SF_TTL_Num SF_TTL_IRRL SF_TTL_Henkan SF_TTL_Disc;
+if Jimusho="#N/A" then delete;
+*if Jimusho="SF_TOTAL" then Jimusho="TOTAL";
+run;
+
+/*SK*/
+data WORK.SK_JIMUSHO;
+infile '~/SK_Jimusho.csv' delimiter = ',' MISSOVER DSD lrecl=32767 firstobs=2;
+informat SK_Jimusho $60. Jimusho $60. 
+	SK_NL_Num best32. SK_NL_IRRL best32. SK_NL_Henkan best32. SK_NL_Disc best32.
+	SK_L_Num best32. SK_L_IRRL best32. SK_L_Henkan best32. SK_L_Disc best32.
+	SK_TTL_Num best32. SK_TTL_IRRL best32. SK_TTL_Henkan best32. SK_TTL_Disc best32.;
+input SK_Jimusho $ Jimusho $
+	SK_NL_Num SK_NL_IRRL SK_NL_Henkan SK_NL_Disc
+	SK_L_Num SK_L_IRRL SK_L_Henkan SK_L_Disc
+	SK_TTL_Num SK_TTL_IRRL SK_TTL_Henkan SK_TTL_Disc;
+if Jimusho="#N/A" then delete;
+*if Jimusho="SK_TOTAL" then Jimusho="TOTAL";
+run;
+
+/*AP*/
+data WORK.AP_JIMUSHO;
+infile '~/AP_Jimusho.csv' delimiter = ',' MISSOVER DSD lrecl=32767 firstobs=2;
+informat AP_Jimusho $60. Jimusho $60. 
+	AP_NL_Num best32. AP_NL_IRRL best32. AP_NL_Henkan best32. AP_NL_Disc best32.
+	AP_L_Num best32. AP_L_IRRL best32. AP_L_Henkan best32. AP_L_Disc best32.
+	AP_TTL_Num best32. AP_TTL_IRRL best32. AP_TTL_Henkan best32. AP_TTL_Disc best32.;
+input AP_Jimusho $ Jimusho $
+	AP_NL_Num AP_NL_IRRL AP_NL_Henkan AP_NL_Disc
+	AP_L_Num AP_L_IRRL AP_L_Henkan AP_L_Disc
+	AP_TTL_Num AP_TTL_IRRL AP_TTL_Henkan AP_TTL_Disc;
+if Jimusho="#N/A" then delete;
+*if Jimusho="AP_TOTAL" then Jimusho="TOTAL";
+run;
+
+proc sort data=SF_Jimusho;by Jimusho;run;
+proc sort data=SK_Jimusho;by Jimusho;run;
+proc sort data=AP_Jimusho;by Jimusho;run;
+
+data Grp_Jimusho;
+merge SF_Jimusho(in=sf) SK_Jimusho(in=sk) AP_Jimusho(in=ap);
+by Jimusho;
+if sf and ap and sk;
+Total_Wakai=SF_TTL_Num+SK_TTL_Num+AP_TTL_Num;
+run;
+
+proc sort data=Grp_Jimusho;by descending Total_Wakai;run;
+
+/******/
+
+data _null_;
+set Grp_Jimusho;
+file '~/Grp_Jimusho.csv' dlm=',' dsd lrecl=32767;
+put
+SF_Jimusho Jimusho SF_NL_Num SF_NL_IRRL SF_NL_Henkan SF_NL_Disc SF_L_Num SF_L_IRRL SF_L_Henkan SF_L_Disc SF_TTL_Num SF_TTL_IRRL SF_TTL_Henkan SF_TTL_Disc
+SK_Jimusho SK_NL_Num SK_NL_IRRL SK_NL_Henkan SK_NL_Disc SK_L_Num SK_L_IRRL SK_L_Henkan SK_L_Disc SK_TTL_Num SK_TTL_IRRL SK_TTL_Henkan SK_TTL_Disc
+AP_Jimusho AP_NL_Num AP_NL_IRRL AP_NL_Henkan AP_NL_Disc AP_L_Num AP_L_IRRL AP_L_Henkan AP_L_Disc AP_TTL_Num AP_TTL_IRRL AP_TTL_Henkan AP_TTL_Disc;
+run;
+
+
+
+
+
+
+/******/
+proc export data=Grp_Jimusho
+outfile="~/Grp_Jimusho.csv"
+dbms=csv replace;run;
