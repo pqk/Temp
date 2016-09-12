@@ -1,0 +1,2885 @@
+/*wps*/
+options mlogic mprint symbolgen mcompilenote=all; /*debugging ON*/
+options nomlogic nomprint nosymbolgen mcompilenote=none; /*debugging OFF*/
+
+
+
+proc freq data=cust;
+tables Book / nocum nopercent;
+where portfolio In("AF","PL","WC","XS") and book in("OB","PO","WO","PO5Y") and legal_flag=0 and
+gz_seg not in("New_W","W") and eligible_flag=1;
+run;
+
+/**/
+data cust1;
+set cust(where=(portfolio In("AF","PL","WC","XS") and book in("OB","PO","WO","PO5Y") and legal_flag=0 and
+gz_seg not in("New_W","W") and eligible_flag=1));
+
+if substr(gz_seg,1,3)='A-1' or gz_seg="R" then gz_seg1='A1R';
+else if substr(gz_seg,1,3)='A-2' then gz_seg1='A2';
+else if substr(gz_seg,1,3)='B-1' or substr(gz_seg,1,3)='B-2' then gz_seg1='B';
+else gz_seg1=gz_seg;
+run;
+
+proc freq data=cust1;
+tables Book / nocum nopercent;
+run;
+
+
+/**/
+
+
+proc means data=sum_eligible0809 sum;
+var count;
+class book;
+
+where portfolio In("AF","PL","WC","XS") and book in("OB","PO","WO","PO5Y") and legal_flag=0 and
+gz_seg not in("New_W","W") and eligible_flag=1;
+run;
+
+
+in("A-2-1","A-2-2","A-1","B-1","B-2","C","R")
+
+ proc export data=sum_eligible1511
+ outfile="~/sum_eligible1511.csv"
+ dbms=csv replace;run;
+ 
+ 
+ 
+ data test;
+ x=1;
+ run;
+ 
+ 
+gz_seg^=""
+and eligible_flag=1
+
+create table test as
+select
+	c003 as YM format=YYMMDD10.,
+	Portfolio,
+	pl_trans,
+	pl_irrl_flag,
+	gz_seg,
+	book,
+	legal_flag,
+	eligible_flag,
+	Passed_Bucket,
+	trans_flag ,
+	irrl_flag ,
+	count(serialno)			as count,
+	sum(ac28/1000000)		as mcs_MM,
+	sum(pl_irrl_balance/1000000)	as pl_irrl_MM ,
+	sum(irrl_balance/1000000)		as irrl_MM
+from
+	cust
+group by
+	YM,
+	Portfolio,
+	pl_trans,
+	pl_irrl_flag,
+	gz_seg,
+	book,
+	legal_flag,
+	eligible_flag,
+	Passed_Bucket ,
+	trans_flag ,
+	irrl_flag
+	;
+quit ;
+
+
+
+
+/****/
+proc sort data=SFDATA.model_eligible1312;by serialno;run;
+
+data sfdata.bo_eligible1312;
+set SFDATA.model_eligible1312;
+if substr(book,1,2)='PO' then book1='PO';
+else if substr(book,1,2)='WO' then book1='WO';
+else if substr(book,1,2)='OB' then book1='OB';
+else book1=book;
+if irrl_flag='-' or irrl_flag='0' or irrl_flag='N' then irrl_flag2='-';
+else irrl_flag2=irrl_flag;
+
+if substr(gz_seg,1,3)='A-1' then gz_seg1='A1';
+else if substr(gz_seg,1,3)='A-2' then gz_seg1='A2';
+else if substr(gz_seg,1,3)='B-1' then gz_seg1='B1';
+else if substr(gz_seg,1,3)='B-2' then gz_seg1='B2';
+else gz_seg1=gz_seg;
+
+if substr(gz_seg,1,3)='A-1' or substr(gz_seg,1,1)='R' then gz_seg2='A1R';
+else if substr(gz_seg,1,3)='A-2' then gz_seg2='A2';
+else if substr(gz_seg,1,1)='B' then gz_seg2='B';
+else gz_seg2=gz_seg;
+
+/*C over 10yr PO Adjust*/
+if book1='PO' and gz_seg2='C' and book='PO' and
+(Passed_Bucket='10<=Year<11' or Passed_Bucket='11<=Year<12' or Passed_Bucket='12<=Year<13' or Passed_Bucket='13<=Year<14'
+or Passed_Bucket='14<=Year<15' or Passed_Bucket='15<=Year') then C_Adj=1;else C_Adj=0;
+
+/*BO model Eligible variable*/
+if (portfolio='PL' or portfolio='AF' or portfolio='WC' or portfolio='XS') and
+(book='OB' or book='WO' or book='PO' or book='PO5Y') and eligible_flag=1 and legal_flag=0 and C_Adj=0 then BO_Model=1;
+else BO_Model=0;
+run;
+
+proc sort data=SFDATA.pror_sum1312;by serialno;run;
+data SFDATA.bo_eligible1312(drop=pr002);
+merge SFDATA.bo_ELIGIBLE1312(in=e) SFDATA.pror_sum1312(in=p keep=serialno pr002);
+by SERIALNO;
+if e;
+if pr002='' then bo_gz='non_gz';
+else bo_gz='gz';
+run;
+
+proc sort data=SFDATA.cust1312;by serialno;run;
+data SFDATA.bo_eligible1312;
+merge SFDATA.bo_ELIGIBLE1312(in=e) SFDATA.cust1312(in=c keep=serialno C027 c028 c029 c030 c031);
+by SERIALNO;
+if e;
+array bl(*) c027 - c031; 
+	if	bl(1)=1 or 	bl(2)=1	or 	bl(3)=1	or 	bl(4)=1	or 	bl(5)=1
+	then legal_type=1 ;
+
+	else if	bl(1)=2	or	bl(2)=2	or	bl(3)=2	or	bl(4)=2	or	bl(5)=2
+	then legal_type=2 ;
+
+	else if bl(1) in (42,75) or bl(2) in (42,75) or	bl(3) in (42,75) or	bl(4) in (42,75) or	bl(5) in (42,75)
+	then legal_type=3 ;
+
+	else if bl(1) in (19,20,79)	or 	bl(2) in (19,20,79)	or 	bl(3) in (19,20,79)	or	bl(4) in (19,20,79)	or 	bl(5) in (19,20,79)
+	then legal_type=4 ;
+
+	else if bl(1) in (70,74) or bl(2) in (70,74) or	bl(3) in (70,74) or	bl(4) in (70,74) or bl(5) in (70,74)
+	then legal_type=5 ;
+
+	else if bl(1) in (5,41,56) or bl(2) in (5,41,56) or bl(3) in (5,41,56) or bl(4) in (5,41,56) or	bl(5) in (5,41,56)
+	then legal_type=6 ;
+
+	else if bl(1) in (55,77) or	bl(2) in (55,77) or	bl(3) in (55,77) or	bl(4) in (55,77) or	bl(5) in (55,77)
+	then legal_type=7 ;
+
+	else if bl(1) in (80,81) or bl(2) in (80,81) or bl(3) in (80,81) or	bl(4) in (80,81) or bl(5) in (80,81)
+	then legal_type=8 ;
+
+	else						legal_type=0 ;
+
+	/***** Eligible Flag *****/
+	eligible_flag1=(legal_type=0);
+	
+if legal_type=3 or legal_type=4 or legal_type=5 or legal_type=6 or legal_type=7 or legal_type=8 then L_type='3-8';
+else if legal_type=1 or legal_type=2 then L_type='1,2';
+else L_type='0';
+
+if L_type in('1,2','0') then LI=0; else LI=1;
+run;
+
+proc sql;
+create table SFDATA.BO_ELIGIBLE1312_PART as
+select SERIALNO,portfolio,gz_seg,gz_seg1,gz_seg2,book,book1,Passed_Bucket,C027,c028,c029,c030,c031,legal_type,L_type,LI,eligible_flag,eligible_flag1,bo_gz,BO_Model
+from SFDATA.bo_eligible1312
+order by SERIALNO;
+run;
+
+/*Generates EXACT Eligible as BO Model 1312*/
+data BO_elig;
+set SFDATA.BO_ELIGIBLE1312;
+where BO_Model=1;run;
+/**/
+
+
+
+
+
+
+		if t1 and t2 and book1='OB' and Mstr_Status1="EXIST" then Stat='OB_EXIST'; /* in both current an prior month EXIST*/
+		else if t1 and not t2 and book1='OB' and Mstr_Status1="EXIST" then Stat='OB_OUT';/*in prior not in current DROP*/
+		else if t2 and not t1 and book1='OB' and Mstr_Status1="EXIST" then Stat='OB_IN';/*in present not prior ADD*/
+		
+		else if t1 and t2 and book1='PO' and Mstr_Status1="EXIST" then Stat='PO_EXIST'; 
+		else if t1 and not t2 and  book1='PO' and Mstr_Status1="EXIST" then Stat='PO_OUT';
+		else if t2 and not t1 and book1='PO' and Mstr_Status1="EXIST" then Stat='PO_IN';
+		
+		else if t1 and t2 and book1='WO' and Mstr_Status1="EXIST" then Stat='WO_EXIST';
+		else if t1 and not t2 and book1='WO' and Mstr_Status1="EXIST" then Stat='WO_OUT';
+		else if t2 and not t1 and book1='WO' and Mstr_Status1="EXIST" then Stat='WO_IN';
+		
+		else if t1 and t2 and book1='CO' and Mstr_Status1="EXIST" then Stat='CO_EXIST';
+		else if t1 and not t2 and book1='CO' and Mstr_Status1="EXIST" then Stat='CO_OUT';
+		else if t2 and not t1 and book1='CO' and Mstr_Status1="EXIST" then Stat='CO_IN';
+		
+		else if t1 and t2 and book1='NA' and Mstr_Status1="EXIST" then Stat='NA_EXIST';
+		else if t1 and not t2 and book1='NA' and Mstr_Status1="EXIST" then Stat='NA_OUT';
+		else if t2 and not t1 and book1='NA' and Mstr_Status1="EXIST" then Stat='NA_IN';
+		
+		/*******/
+		/*if MS1='EXIST' and lt="nonLI" and sol=0 and bk10=book1 and sg10=gz_seg1 then Mstr_Status='EXIST';
+		else if MS1='EXIST' and lt="nonLI" and sol=0 and bk10=book1 and sg10^=gz_seg1 then Mstr_Status='OUT';
+		else if MS1='EXIST' and lt="nonLI" and sol=0 and bk10^=book1 and sg10=gz_seg1 then Mstr_Status='OUT';
+		else if MS1='EXIST' and lt="nonLI" and sol=0 and bk10^=book1 and sg10^=gz_seg1 then Mstr_Status='OUT';
+		
+		else if MS1='OUT' and lt="LI" and sol=0 and bk10=book1 and sg10=gz_seg1 then Mstr_Status='OUT';*/
+
+
+data test;
+set SFDATA.bo_eligible1312;
+if L_type='3-8' and legal_flag=1 then check=0;else check=1;run;
+
+proc sort data=test;by BO_Model;run;
+data test;
+set test;
+where check=1;run;
+
+
+
+
+data elig;
+set elig;
+if eligible_flag1=eligible_flag then check=0;else check=1;run;
+
+proc sort data=elig out=test;by check;where check=1;run;
+
+data SFDATA.bo_eligible1312;
+set SFDATA.bo_eligible1312;
+if legal_type=3 or legal_type=4 or legal_type=5 or legal_type=6 or legal_type=7 or legal_type=8 then L_type='3-8';
+else if legal_type=1 or legal_type=2 then L_type='1,2';
+else L_type='0';run;
+
+proc sort data=elig out=test;by L_type;where L_type='0';run;
+
+
+proc sql;
+create table temp1 as
+select Legal_Flag, count(legal_flag) as LF/*,Eligible_flag,count(Eligible_flag) as EF*/
+from SFDATA.bo_eligible1310
+group by Legal_Flag;quit;
+
+proc sql;
+create table temp2 as
+select Eligible_flag,count(Eligible_flag) as EF
+from SFDATA.bo_eligible1310
+group by eligible_Flag;quit;
+
+
+
+
+
+
+
+
+
+
+
+
+/*analysis*/
+proc freq data=WORK.BO_ELIG;
+tables gz_seg2*book1 /norow nocum nocol nopercent;
+run;
+
+proc freq data=model_eligible1310;
+tables gz_seg*book1 /norow nocum nocol nopercent;
+where gz_seg1='A2';run;
+/**/
+
+/*Comparison data set*/
+data sfdata.BO_eligible1310;
+set sfdata.model_eligible1310;
+if substr(book,1,2)='PO' then book1='PO';
+else if substr(book,1,2)='WO' then book1='WO';
+else if substr(book,1,2)='OB' then book1='OB';
+else book1=book;
+if irrl_flag='-' or irrl_flag='0' or irrl_flag='N' then irrl_flag2='-';
+else irrl_flag2=irrl_flag;
+
+if substr(gz_seg,1,3)='A-1' then gz_seg1='A1';
+else if substr(gz_seg,1,3)='A-2' then gz_seg1='A2';
+else if substr(gz_seg,1,3)='B-1' then gz_seg1='B1';
+else if substr(gz_seg,1,3)='B-2' then gz_seg1='B2';
+else gz_seg1=gz_seg;
+
+if substr(gz_seg,1,3)='A-1' or substr(gz_seg,1,1)='R' then gz_seg2='A1R';
+else if substr(gz_seg,1,3)='A-2' then gz_seg2='A2';
+else if substr(gz_seg,1,1)='B' then gz_seg2='B';
+else gz_seg2=gz_seg;
+run;
+/**/
+
+data status_score;
+set sfdata.status_score(keep=SERIALNO seg gz sol status posinega1 elapse_year);run;
+
+proc sort data=sfdata.BO_eligible1310;by serialno;run;
+proc sort data=status_score;by serialno;run;
+
+data sfdata.Comp;
+merge sfdata.BO_eligible1310(in=e) status_score;
+by serialno;
+if e;
+if seg='' then Model='BO';else Model='AL';
+run;
+
+data sfdata.Comp;
+set sfdata.comp;
+if substr(seg,1,3)='A-1' then seg1='A1';
+else if substr(seg,1,3)='A-2' then seg1='A2';
+else if substr(seg,1,3)='B-1' then seg1='B1';
+else if substr(seg,1,3)='B-2' then seg1='B2';
+else seg1=seg;
+
+if substr(seg,1,3)='A-1' or substr(seg,1,1)='R' then seg2='A1R';
+else if substr(seg,1,3)='A-2' then seg2='A2';
+else if substr(seg,1,1)='B' then seg2='B';
+else seg2=seg;
+
+if status='paid-off' then status='PO';
+else if status='write-off' then status='WO';
+else if status='on-book' then status='OB';
+else if status='not-used' then status='NA';
+run;
+
+data CompA1;
+set sfdata.comp;
+where seg1='A1' and Status='PO' and Model='AL' and sol='not_sol' and gz='non_gz' and posinega1='nega' and eligible_flag=0;
+*where gz_seg2='A1R' and Book1='PO' and BO_Model=1;run;
+
+data CompA2;
+set sfdata.comp;
+where seg2='A2' and Status='PO' and Model='AL' and sol='not_sol' and gz='non_gz' and posinega1='nega' and eligible_flag=0;
+*where gz_seg2='A2' and Book1='PO' and BO_Model=1;run;
+
+data CompB;
+set sfdata.comp;
+where seg2='B' and Status='PO' and Model='AL' and sol='not_sol' and gz='non_gz' and posinega1='nega' and eligible_flag=0;
+*where gz_seg2='B' and Book1='PO' and BO_Model=1;run;
+
+data CompC;
+set sfdata.comp;
+where seg2='C' and Status='PO' and Model='AL' and sol='not_sol' and gz='non_gz' and posinega1='nega' and eligible_flag=0;
+*where gz_seg2='C' and Book1='PO' and BO_Model=1;run;
+
+
+proc freq data=WORK.COMPa1;
+tables gz_seg2*book1*l_type/norow nocum nocol nopercent;
+run;
+
+
+proc freq data=WORK.tempc;
+tables PROR*l_type/norow nocum nocol nopercent;
+run;
+
+legal_flag
+
+sol*posinega1
+
+
+data TempA1;
+set WORK.COMPA1;
+where seg1='';run;
+
+
+data compc;
+merge compc(in=c) SFDATA.pror_sum(keep=serialno pr002);
+by serialno; if c;
+if pr002=. then PROR='null';else PROR='gz';
+run;
+
+
+
+proc freq data=SFDATA.COMP;
+tables eligible_flag*legal_flag /norow nocum nocol nopercent;
+where BO_Model=1;
+run;
+
+
+data WORK.TEMPc;
+set WORK.TEMPc;
+if pr002=. then PROR='null';else PROR='gz';run;
+
+
+
+
+
+
+
+proc freq data=WORK.MODEL_ELIGIBLE1310;
+tables BO_Model /norow nocum nocol nopercent;
+run;
+
+
+data Elig_C_PO;
+set WORK.MODEL_ELIGIBLE1310;
+where book1='PO' and gz_seg2='C';run;
+
+proc freq data=Elig_C_PO;
+tables gz_seg1*book /norow nocum nocol nopercent;
+where gz_seg1='A2';
+run;
+
+
+
+%let y=1411;
+%put &y;
+
+X "cd /home/houmu-saiken/pkirsch/";
+
+X "gzip in_process_&y..sas7bdat";
+
+X "gzip -d in_process_1411.sas7bdat";
+
+
+%let y=0810;
+%put &y;
+
+X "cd /share/sfrisk/legal/1_eligible/";
+
+X "gzip -d cust&y..sas7bdat";
+
+
+
+X "gzip -d in_process_1411.sas7bdat";
+
+
+
+%let y=0810;
+%put &y;
+X "cd /home/houmu-saiken/pkirsch/";
+
+X "gzip -d cust&y..sas7bdat";
+
+data a;
+length c $3;
+a=1;b=2;c="IN";output;
+a=2;b=5;c="IN";output;
+a=3;b=9;c="OUT";output;
+a=4;b=1;c="OUT";output;
+a=5;b=4;c="OUT";output;
+a=.;b=4;c="";output;
+a=6;b=6;c="OVER";output;
+a=7;b=7;c="OVER";output;
+run;
+
+data check;
+set a;
+if c not in("IN","OUT");run;
+
+*if missing(c) then Check="Missing";
+run;
+
+%let test=105;
+%let yubba=66;
+%macro test;
+
+%if &test=105 and &yubba=66 %then %do;
+
+data a;
+set a;
+d=105;
+run;
+%end;
+
+%else %do;
+data a;
+set a;
+d=106;
+run;
+%end;
+%mend;
+%test
+
+
+
+
+
+data b;
+a=1;b=9;output;
+a=2;b=9;output;
+a=5;b=9;output;
+run;
+
+data ab;
+merge a(in=t1 keep=a)
+	b(in=t2);
+by a;
+run;
+
+proc means data=a sum;
+var b;
+class c;
+run;
+
+
+data c;
+set a(where=(a In(1,2,3,4) and c not in("OUT")));
+run;
+
+
+proc freq data=cust;
+tables Book1 / nocum nopercent;
+where portfolio In("AF","PL","WC","XS") and book1 in("OB","PO","WO","PO5Y") and legal_flag=0 and
+gz_seg not in("New_W","W") and eligible_flag=1;
+run;
+
+
+proc means data=test0809 sum maxdec=2;
+var count irrl_MM mcs_MM;
+class book gz_seg1 irrl_flag;
+run;
+
+
+data check;
+set cust;
+if missing(book);run;
+
+proc freq data=sum_eligible;
+tables YM*Book / nocum nopercent nocol norow;
+run;
+
+
+proc means data=sum_eligible sum maxdec=0;
+var count;
+class YM book;
+run;
+
+
+
+
+data custard Elig_Missing0810;
+merge home._0809_pool_all (in=t1 keep=serialno)/*MUST create file if doesn't already exist*/
+	  cust(in=t2)/*(where=(portfolio In("AF","PL","WC","XS") and book in("OB","PO","WO","PO5Y") and 
+				  legal_flag=0 and gz_seg not in("New_W","W") and eligible_flag=1))*/;
+by serialno;
+
+if t2 and not t1 then output Elig_Missing0810;/* Prev Mo OB/PO/WO >> current mo LI -OR- PO > SOL */
+else output custard;
+
+if missing(book) then check=1;else check=0;
+
+if substr(gz_seg,1,3)='A-1' or gz_seg="R" then gz_seg1='A1R';
+	else if substr(gz_seg,1,3)='A-2' then gz_seg1='A2';
+	else if substr(gz_seg,1,3)='B-1' or substr(gz_seg,1,3)='B-2' then gz_seg1='B';
+	else gz_seg1=gz_seg;
+run;
+
+data check;
+set custard;
+if check=1;run;
+
+
+data check;
+set cust;
+		if (portfolio="AF" or portfolio="PL" or portfolio="WC" or portfolio="XS") and 
+		   (book="OB" or book="PO" or book="WO" or book="PO5Y") and 
+			legal_flag=0 and (gz_seg^="New_W" or gz_seg^="W") and eligible_flag=1 then Model_Elig=1;
+		else Model_Elig=0;
+run;
+
+proc datasets lib=work nolist;/*copy a datafile from one lib to another*/
+copy out=home;
+select sum_eligible0810;quit;
+
+
+proc datasets lib=work nolist;/*copy a datafile from one lib to another*/
+copy out=home;
+select Performance_0812;
+select Performance_0912;
+select Performance_1112;
+select Performance_1412;quit;
+run;
+
+
+proc datasets lib=work kill memtype=data;
+run;
+quit;
+
+
+data a;
+set cust;
+if missing(book);run;
+
+if substr(book,1,2)='PO' then book1='PO';
+else if substr(book,1,2)='WO' then book1='WO';
+else if substr(book,1,2)='OB' then book1='OB';
+else book1=book;
+
+/*********************/
+
+data home.b;
+merge home.cust0809
+	(in=t1 keep=serialno portfolio book1 book gz_seg1 gz_seg passed_bucket legal_type legal_flag Clsing_Flag
+	rename=(/*portfolio=port0*/ book1=book10 book=book0 gz_seg1=gz_seg10 gz_seg=gz_seg0 
+			passed_bucket=passed_bucket0 legal_type=legal_type0 legal_flag=legal_flag0)
+			where=(Clsing_Flag=1))
+	home.cust0810(in=t2 where=(Clsing_Flag=1));
+by serialno;
+
+Length Book_Status $14 LI_Status $18;
+if book10="PO" and book1="PO" then Book_Status="PO_>_PO";
+else if book10="PO" and book1="OB" then Book_Status="PO_>_OB";
+else if book10="PO" and book1="WO" then Book_Status="PO_>_WO"; /*should not exist*/
+else if  book10="PO" and book1="CO" then Book_Status="PO_>_CO";/*should not exist*/
+else if  book10="PO" and book1="NA" then Book_Status="PO_>_NA";/*exists?*/
+
+if book10="WO" and book1="WO" then Book_Status="WO_>_WO";
+else if book10="WO" and book1="PO" then Book_Status="WO_>_PO";
+else if book10="WO" and book1="OB" then Book_Status="WO_>_OB";/*should not exist*/
+else if  book10="WO" and book1="CO" then Book_Status="WO_>_CO";/*should not exist*/
+else if  book10="WO" and book1="NA" then Book_Status="WO_>_NA";/*exists?*/
+
+if book10="OB" and book1="OB" then Book_Status="OB_>_OB";
+else if  book10="OB" and book1="WO" then Book_Status="OB_>_WO";
+else if  book10="OB" and book1="PO" then Book_Status="OB_>_PO";
+else if  book10="OB" and book1="CO" then Book_Status="OB_>_CO";/*should not exist*/
+else if  book10="OB" and book1="NA" then Book_Status="OB_>_NA";/*exists?*/
+
+if book10="CO" and book1="CO" then Book_Status="CO_>_CO";
+else if  book10="CO" and book1="WO" then Book_Status="CO_>_WO";/*should not exist*/
+else if  book10="CO" and book1="PO" then Book_Status="CO_>_PO";/*should not exist*/
+else if  book10="CO" and book1="OB" then Book_Status="CO_>_OB";/*should not exist*/
+else if  book10="CO" and book1="NA" then Book_Status="CO_>_NA";/*exists?*/
+
+if book10="NA" and book1="NA" then Book_Status="NA_>_NA";
+else if  book10="NA" and book1="WO" then Book_Status="NA_>_WO";/*should not exist*/
+else if  book10="NA" and book1="PO" then Book_Status="NA_>_PO";/*should not exist*/
+else if  book10="NA" and book1="OB" then Book_Status="NA_>_OB";/*should not exist*/
+else if  book10="NA" and book1="CO" then Book_Status="NA_>_CO";/*exists?*/
+
+/*SOL*/
+if book0="PO5Y" and book="PO10Y" then Book_Status="PO_>_SOL";/*must come after initial PO > PO, WO > WO vet*/
+if book0="WO" and book="WO10Y" then Book_Status="WO_>_SOL";
+if book0="CO" and passed_bucket0 not in("10<=Year<11","11<=Year<12","12<=Year<13","13<=Year<14","14<=Year<15","15<=Year") and
+	passed_bucket in("10<=Year<11","11<=Year<12","12<=Year<13","13<=Year<14","14<=Year<15","15<=Year") then Book_Status="CO_>_SOL";
+if book0="NA" and passed_bucket0 not in("10<=Year<11","11<=Year<12","12<=Year<13","13<=Year<14","14<=Year<15","15<=Year") and
+	passed_bucket in("10<=Year<11","11<=Year<12","12<=Year<13","13<=Year<14","14<=Year<15","15<=Year") then Book_Status="NA_>_SOL";
+	
+/*LI*/
+if book10="OB" and legal_flag0=1 and book1="OB" and legal_flag=1 then LI_Status="OB_LI>OB_LI";
+else if book10="OB" and legal_flag0=0 and book1="OB" and legal_flag=1 then LI_Status="OB_>_LI"; /*subset of OB to OB*/
+else if book10="OB" and legal_flag0=0 and book1="OB" and (legal_type=<2 and legal_type>0) then LI_Status="OB_>_BKO-D";
+else if book10="OB" and legal_flag0=1 and book1="OB" and (legal_type=<2 and legal_type>0) then LI_Status="OB_LI>LI_BKO-D";
+else if book10="OB" and (legal_type0=<2 and legal_type0>0) and book1="OB" and legal_flag=1 then LI_Status="OB_BKO-D>LI_BKO-D";
+
+if book10="PO" and legal_flag0=1 and book1="PO" and legal_flag=1 then LI_Status="PO_LI>PO_LI";
+else if book10="PO" and legal_flag0=0 and book1="PO" and legal_flag=1 then LI_Status="PO_>_LI";
+else if book10="PO" and legal_flag0=0 and book1="PO" and (legal_type=<2 and legal_type>0) then LI_Status="PO_>_BKO-D";
+else if book10="PO" and legal_flag0=1 and book1="PO" and (legal_type=<2 and legal_type>0) then LI_Status="PO_LI>LI_BKO-D";
+else if book10="PO" and (legal_type0=<2 and legal_type0>0) and book1="PO" and legal_flag=1 then LI_Status="PO_BKO-D>LI_BKO-D";
+
+if book10="WO" and legal_flag0=1 and book1="PO" and legal_flag=1 then LI_Status="WO_LI>WO_LI";
+else if book10="WO" and legal_flag0=0 and book1="WO" and legal_flag=1 then LI_Status="WO_>_LI";
+else if book10="WO" and legal_flag0=0 and book1="WO" and (legal_type=<2 and legal_type>0) then LI_Status="WO_>_BKO-D";
+else if book10="WO" and legal_flag0=1 and book1="WO" and (legal_type=<2 and legal_type>0) then LI_Status="WO_LI>LI_BKO-D";
+else if book10="WO" and (legal_type0=<2 and legal_type0>0) and book1="WO" and legal_flag=1 then LI_Status="WO_BKO-D>LI_BKO-D";
+
+if book10="CO" and legal_flag0=1 and book1="CO" and legal_flag=1 then LI_Status="CO_LI>WO_LI";
+else if book10="CO" and legal_flag0=0 and book1="CO" and legal_flag=1 then LI_Status="CO_>_LI";
+else if book10="CO" and legal_flag0=0 and book1="CO" and (legal_type=<2 and legal_type>0) then LI_Status="CO_>_BKO-D";
+else if book10="CO" and legal_flag0=1 and book1="CO" and (legal_type=<2 and legal_type>0) then LI_Status="CO_LI>LI_BKO-D";
+else if book10="CO" and (legal_type0=<2 and legal_type0>0) and book1="CO" and legal_flag=1 then LI_Status="CO_BKO-D>LI_BKO-D";
+
+if book10="NA" and legal_flag0=1 and book1="NA" and legal_flag=1 then LI_Status="NA_LI>WO_LI";
+else if book10="NA" and legal_flag0=0 and book1="NA" and legal_flag=1 then LI_Status="NA_>_LI";
+else if book10="NA" and legal_flag0=0 and book1="NA" and (legal_type=<2 and legal_type>0) then LI_Status="NA_>_BKO-D";
+else if book10="NA" and legal_flag0=1 and book1="NA" and (legal_type=<2 and legal_type>0) then LI_Status="NA_LI>LI_BKO-D";
+else if book10="NA" and (legal_type0=<2 and legal_type0>0) and book1="NA" and legal_flag=1 then LI_Status="NA_BKO-D>LI_BKO-D";
+
+if LI_Status^="" then Book_Status=LI_Status;
+drop book10 book0 gz_seg10 gz_seg0 passed_bucket0 legal_type0 legal_flag0 LI_Status;
+run;
+
+	proc sql ;
+	create table home.x_b as
+	select
+		c003 as YM format=YYMMDD10.,
+		portfolio,
+		gz_seg1,
+		gz_seg,
+		book1,
+		book,
+		passed_bucket,
+		Clsing_flag,
+		irrl_flag,
+		legal_flag,
+		eligible_flag,
+		Book_Status,
+		count(serialno)			as count,
+		sum(irrl_balance/1000000)		as irrl_MM,
+		sum(ac28/1000000)		as mcs_MM
+	from
+		home.b
+	group by
+		YM,
+		Clsing_flag,
+		portfolio,
+		gz_seg1,
+		gz_seg,
+		book1,
+		book,
+		legal_flag,
+		eligible_flag,
+		passed_bucket,
+		irrl_flag,
+		Book_Status
+		;
+	quit ;
+
+data home.x_elig;
+set
+home.x_a
+home.x_b;
+run;
+
+proc export data = home.x_elig
+OUTFILE= "~/x_Elig_.csv"
+dbms = csv replace ;
+run ;
+/*
+
+if book10="PO" and legal_flag0=1 and book1="PO" and legal_flag=1 then LI_Status="PO_LI_>_PO_LI";
+else if book10="PO" and legal_flag0=0 and legal_type0>2 and legal_flag=1 then LI_Status="PO_>_LI";
+else if book10="PO" and legal_flag0=0 and legal_type0=<2 and legal_flag=1 then LI_Status="PO_>_LI_BKO-D";
+
+if book10="WO" and legal_flag0=1 and book1="WO" and legal_flag=1 then LI_Status="WO_LI_>_WO_LI";
+else if book10="WO" and legal_flag0=0 and legal_type0>2 and legal_flag=1 then LI_Status="WO_>_LI";
+else if book10="WO" and legal_flag0=0 and legal_type0=<2 and legal_flag=1 then LI_Status="WO_>_LI_BKO-D";
+
+if book10="CO" and legal_flag0=1 and book1="CO" and legal_flag=1 then LI_Status="CO_LI_>_CO_LI";
+else if book10="CO" and legal_flag0=0 and legal_type0>2 and legal_flag=1 then LI_Status="CO_>_LI";
+else if book10="CO" and legal_flag0=0 and legal_type0=<2 and legal_flag=1 then LI_Status="CO_>_LI_BKO-D";
+
+if book10="NA" and legal_flag0=1 and book1="NA" and legal_flag=1 then LI_Status="NA_LI_>_NA_LI";
+if book10="NA" and legal_flag0=0 and legal_type0>2 and legal_flag=1 then LI_Status="NA_>_LI";
+else if book10="NA" and legal_flag0=0 and legal_type0=<2 and legal_flag=1 then LI_Status="NA_>_LI_BKO-D";*/
+
+
+*if book0="WO" and passed_bucket0 not in("10<=Year<11","11<=Year<12","12<=Year<13","13<=Year<14","14<=Year<15","15<=Year") and
+	passed_bucket in("10<=Year<11","11<=Year<12","12<=Year<13","13<=Year<14","14<=Year<15","15<=Year") then Book_Status="WO_>_SOL";
+
+*if book10="OB" and legal_type0=0 and (legal_type=1 or legal_type=1.5 or legal_type=2) then LI_Status="OB_>_BKO/Death";
+*if book10="OB" and legal_flag0=1 and legal_flag=0 and
+	(legal_type0=1 or legal_type0=1.5 or legal_type0=2) and  (legal_type=1 or legal_type=1.5 or legal_type=2) then LI_Status="LI_>_BKO/Death";
+
+*if book10="PO" and legal_type0=0 and legal_flag=1 then LI_Status="PO_>_LI";
+*if book10="WO" and legal_type0=0 and legal_flag=1 then LI_Status="WO_>_LI";
+*if book10="WO" and legal_type0=0 and (legal_type=1 or legal_type=1.5 or legal_type=2) then LI_Status="PO_>_BKO/Death";
+
+
+proc freq data=home.cust0809;
+tables Book1 / norow nocol nopercent nocum;
+run;
+
+
+proc freq data=home.b;
+tables LI_Status / norow nocol nopercent nocum;
+where book_status="OB_>_OB";
+run;
+
+where book_status="CO_>_CO";
+where book_status="WO_>_WO";
+where book_status="PO_>_PO";
+where book_status="OB_>_OB";
+where book_status="NA_>_NA";
+
+proc freq data=home.b;
+tables book_status / norow nocol nopercent nocum;
+run;
+
+proc sort data=home.a out=home.b;by legal_flag legal_type0;
+where book_status="OB_>_OB";
+run;
+
+proc freq data=cust0808;
+tables book / norow nocol nopercent nocum;
+run;
+
+
+data cust0808;
+set cust0808(where=(Clsing_flag=1));
+run;
+
+
+%let i=105;
+%put &&YYMM&i;
+
+data _null_;
+	a = mdy(%substr(&&yymm&i,3,2), 1, %substr(&&yymm&i,1,2));
+	b = put(intnx("month", a, 0, "end"), date9.);
+	call symput("eom", b);
+run;
+
+%put EOM = &eom;
+
+data test; /*Limit to Pool List*/
+merge home.poollist(in=t1)
+	  home.cust_pool;
+by serialno;
+if t1 then Clsing_Flag=1;
+else Clsing_flag=0;
+run;
+proc freq data=test0809;
+tables Clsing_Flag / norow nocol nopercent nocum;
+run;
+
+proc datasets lib=home nolist;
+contents data=cust_pool varnum;
+run;
+quit;
+
+data test;
+set test0809;
+if serialno in(1,2,3,4,5,6,7,8,9,10);
+run;
+
+proc sql;
+insert into test(c003)
+values(.);
+quit;
+
+%let i=105;
+%put &&YYMM&i;
+data _null_;
+	a = mdy(%substr(&&yymm&i,3,2), 1, %substr(&&yymm&i,1,2));
+	b = put(intnx("month", a, 0, "end"), date9.);
+	call symput("eom", b);
+run;
+
+%put EOM = &eom;
+
+data test;
+set test;
+if missing(c003) then c003="&eom"d;
+run;
+
+
+data	segm0808;
+set	gray.segm0809(keep=	serialno se004	) ;
+run ;
+		
+		
+data	a2(keep=serialno) ;
+set	segm0808(where=(se004='A-2-2')) ;
+run ;
+
+
+proc datasets lib=work nolist;/*copy a datafile from one lib to another*/
+copy out=home;
+select cust0810;quit;
+
+	if legal_type=0 then lt="nonLI";
+	else if legal_type>2 then lt="LI";
+	else if legal_type<=2 and legal_type>0 then lt="BKD";
+
+
+/********** 20160117  ***********/
+%macro test;
+data home.c;
+merge home.cust0810(in=t1 where=(Clsing_Flag=1)
+			keep=serialno portfolio book1 book gz_seg1 gz_seg passed_bucket lt legal_flag Clsing_Flag Sol
+			rename=(book1=bk10 book=bk0 gz_seg1=sg10 gz_seg=sg0 passed_bucket=pb0 lt=lt0 legal_flag=lf0 Sol=Sol0))
+			home.cust0811(in=t2 where=(Clsing_Flag=1));
+by serialno;
+
+array ay{4} $ _temporary_ ('WO','PO','CO','NA');
+%do i=1 %to 4;
+	%do j=1 %to 4;
+		if bk10=ay{&i} and book1=ay{&j} /*and lt0=0 and lt1=0 and lf0=0 and lf1=0*/ and /*OLD SOL 2*/
+		sol0=1 and sol=1 then Status=ay{&i}||'_SOL>SOL_'||ay{&j};
+		
+		else if bk10=ay{&i} and book1=ay{&j} /*and lt0=0 and lt1=0 and lf0=0 and lf1=0*/ and /*NEW SOL 3*/
+		sol0=0 and sol=1 then Status=ay{&i}||'____>SOL_'||ay{&j};
+	%end;
+%end;
+
+array az{5} $ _temporary_ ('OB','WO','PO','CO','NA');
+%do q=1 %to 5;
+	%do p=1 %to 5;
+		if 	bk10=az{&q} and book1=az{&p} and lt0="nonLI" and lt="nonLI" and lf0=0 and legal_flag=0 and /*ELIGIBLE 1*/
+		sol0=0 and sol=0 then Status=az{&q}||'____>____'||az{&p};
+		
+		else if	bk10=az{&q} and book1=az{&p} and lt0="LI" and lt="LI" and lf0=1 and legal_flag=1 and /*OLD LI 4*/
+		sol0=0 and sol=0 then Status=az{&q}||'__LI>LI__'||az{&p};
+		
+		else if	bk10=az{&q} and book1=az{&p} and lt0="nonLI" and lt="LI" and lf0=0 and legal_flag=1 and /*NEW LI 5*/
+		sol0=0 and sol=0 then Status=az{&q}||'____>LI__'||az{&p};
+		
+		else if	bk10=az{&q} and book1=az{&p} and lt0="nonLI" and lt="BKD" and lf0=0 and legal_flag=0 and /*NEW BKD 6*/
+		sol0=0 and sol=0 then Status=az{&q}||'____>BKD_'||az{&p};
+		
+		else if	bk10=az{&q} and book1=az{&p} and lt0="LI" and lt="BKD" and lf0=1 and legal_flag=0 and /*OLD LI > NEW BKD 7*/
+		sol0=0 and sol=0 then Status=az{&q}||'__LI>BKD_'||az{&p};
+		
+		else if	bk10=az{&q} and book1=az{&p} and lt0="BKD" and lt="LI" and lf0=0 and legal_flag=1 and /*OLD BKD > NEW LI 8*/
+		sol0=0 and sol=0 then Status=az{&q}||'_BKD>LI__'||az{&p};
+		
+		else if	bk10=az{&q} and book1=az{&p} and lt0="BKD" and lt="BKD" and lf0=0 and legal_flag=0 and /*OLD BKD 9*/
+		sol0=0 and sol=0 then Status=az{&q}||'_BKD>BKD_'||az{&p};
+	%end;
+%end;
+
+Status=strip(compress(status,' '));
+if book1=substr(Status,1,2) and book1=substr(Status,12,2) and countc(Status,'_')=8 then Mstr_Status='EXIST';
+else if book1^=substr(Status,1,2) and book1=substr(Status,12,2) and countc(Status,'_')<=8 then Mstr_Status='IN';
+else Mstr_Status='OUT';
+
+if missing(Status) then Mstr_Status='';
+
+run;
+%mend test;
+
+%test
+
+	proc sql ;
+	create table W_elig_0811 as
+	select
+		c003 as YM format=YYMMDD10.,
+		portfolio,
+		gz_seg1,
+		gz_seg,
+		book1,
+		book,
+		Status,
+		Mstr_Status,
+		passed_bucket,
+		Clsing_flag,
+		irrl_flag,
+		legal_flag,
+		eligible_flag,
+		count(serialno)			as count,
+		sum(irrl_balance/1000000)		as irrl_MM,
+		sum(ac28/1000000)		as mcs_MM
+	from
+		home.c
+	group by
+		YM,
+		Clsing_flag,
+		portfolio,
+		gz_seg1,
+		gz_seg,
+		book1,
+		book,
+		Status,
+		Mstr_Status,
+		legal_flag,
+		eligible_flag,
+		passed_bucket,
+		irrl_flag
+		;
+	quit ;
+	
+	
+	
+	
+data home.W_elig;
+set
+W_elig_0809
+W_elig_0810
+W_elig_0811;run;
+	
+
+proc export data = home.w_elig
+OUTFILE= "~/wy_Elig_.csv"
+dbms = csv replace ;
+run ;
+
+proc freq data=home.a;
+tables Mstr_Status / norow nocol nopercent nocum;
+run;
+
+proc freq data=home.b;
+tables Mstr_Status / norow nocol nopercent nocum;
+run;
+
+proc freq data=home.c;
+tables Mstr_Status / norow nocol nopercent nocum;
+run;
+
+
+proc datasets lib=work nolist;/*copy a datafile from one lib to another*/
+copy out=home;
+select W_elig_0809;
+select W_elig_0810;
+select W_elig_0811;
+quit;
+
+
+
+
+proc sql;
+   title 'Tables That Contain WOフラッグ設定日';
+   select libname, memname, name
+   from dictionary.columns
+   where upcase(name) like 'C____199' and libname='RISKLIB'; /*Var Ex: c1512199*/
+quit;
+
+
+proc sql;
+   title 'Tables That Contain WOフラッグ設定日';
+   select libname, memname, name
+   from dictionary.columns
+   where upcase(name) like '%199%' and libname='MASTER';
+quit;
+     
+ 
+/*Dictionary Tables*/
+proc sql;
+create table SBNP_Metadata as
+select memname,nobs,nvar,crdate
+from dictionary.tables
+where libname='L5' and substr(memname,1,4)='SBNP';
+quit;
+
+
+proc sql;
+create table Where_CYYMM199_1 as
+   select libname, memname, name,nobs,filesize
+   from dictionary.columns
+   where upcase(name) like 'C____199' and libname='RISKLIB'; 
+quit; 
+
+/***/
+
+proc sql;
+create table Where_CYYMM199_4 as
+   select libname, memname, name,nobs,filesize
+   from dictionary.columns
+   where upcase(name) like 'C____199' and libname='RPA'; 
+quit; 
+
+proc sql;
+create table Where_CYYMM199_8 as
+   select libname, memname, name,nobs,filesize
+   from dictionary.columns
+   where upcase(name) like 'C____199' and libname='L2'; 
+quit; 
+
+
+data Where_CYYMM199;
+set 
+	Where_CYYMM199_1
+	Where_CYYMM199_4
+	Where_CYYMM199_8;
+run;
+
+proc export data = Where_CYYMM199
+OUTFILE= "~/Where_CYYMM199.csv"
+dbms = csv replace ;
+run ;
+
+
+
+
+%let a=1;
+%let b=12;
+
+%macro Where_woflag;
+data Where_CYYMM199;
+set 
+	%do i=&a to %to &b;
+	Where_CYYMM199_&i
+	%end;
+;
+run;
+%mend Where_woflag;
+%Where_woflag
+
+
+
+
+
+
+
+
+proc sql;
+create table Where_CYYMM199_4 as
+   select libname, memname, name
+   from dictionary.columns
+   where upcase(name) like 'C____199' and libname='ORALIB'; 
+quit;  
+
+
+ /*** END MARKER ***/
+ data z;z="END OF LINE";run;
+ title "END OF LINE";
+ proc print data=z;run;
+ title; 
+  /****************/
+  
+  
+  %put _user_;
+  
+  %put _global_;
+  
+  
+  
+proc sql;
+select Mstr_Status,Status,count(Serialno) as CNT
+from cust0809
+where book="OB" and gz_seg1 in ("A1","A2","R")
+group by Mstr_Status,Status;
+quit;
+
+
+data a;
+merge cust0809(in=t1)
+	cust0810(in=t2)
+by serialno;
+if t1
+
+
+proc freq data=cust0810;
+tables bk10 /norow nocum nopercent nocol;
+run;
+
+proc sql;
+select bk10,book1,count(serialno) as CNT format comma10.
+from cust0810
+where bk10="OB" or book1="OB"
+group by  bk10,book1;
+quit;
+
+proc sql;
+select  bk10,book1,count(serialno) as CNT format comma10.
+from cust0810
+where status=''/* and bk10="OB" and book1="OB"*/
+group by  bk10,book1;
+quit;
+
+proc sql;
+select  Mstr_Status1,Mstr_Status,Status,count(serialno) as CNT format comma10.
+from cust0810
+where book1='OB'/* and bk10="OB" and book1="OB"*/
+group by  Mstr_Status1,Mstr_Status,Status;
+quit;
+
+data a;
+set cust0810;
+where status='OB____>____OB' and Mstr_status1="IN";
+run;
+
+data b;
+set cust0810;
+where status='OB____>____OB' and Mstr_status1="EXIST";
+run;
+
+data c;
+set cust0810;
+where serialno in(4639,6402007);
+run;
+
+proc sql;
+select  book1,count(serialno) as CNT format comma10.
+from c
+group by  book1;
+quit;
+
+
+
+
+
+
+
+%let	s_cut= 105 ; /*CHANGE */
+%let	e_cut= 108 ; /*CHANGE */
+%macro wrap_up;
+data	home.w_eligible ;
+set
+%do i = &s_cut %to &e_cut ;
+	home.w_elig_&&yymm&i
+%end ;
+;
+run ;
+%mend wrap_up;
+
+%wrap_up
+
+proc export data = home.w_eligible
+OUTFILE= "~/w_eligible_.csv"
+dbms = csv replace ;
+run ;
+
+proc sql;
+select sum(count)
+from home.w_elig_0809;
+quit;
+
+
+data a0809;
+set cust0809;
+where book1="OB" and Mstr_Status1="EXIST";
+run;
+data b0810;
+set cust0810;
+where book1="OB" and Mstr_Status1="EXIST";
+run;
+
+data ab;
+merge a0809(in=t1)
+	  b0810(in=t2 keep=serialno book1 gz_seg1 lt legal_flag Sol  
+			rename=(book1=bkz gz_seg1=sgz lt=ltz legal_flag=lfz Sol=Solz ));
+by serialno;
+if t1 and t2 then Check=0;
+else if t1 and not t2 then check=1;
+else if t2 and not t1 then check=2;
+run;
+
+proc freq data=ab;
+tables check / nocum norow nopercent nocol;
+run;
+
+
+
+
+
+data a;
+set cust0810;
+where book1="OB";
+run;
+data b;
+set cust0809;
+where book1="OB";
+run;
+
+
+
+data ab (drop=bk); /*Cust0810_OB*/
+merge cust0811(in=t1 where=(book1="OB"))
+	  cust0810(in=t2 keep=serialno book1 rename=(book1=bk) where=(bk="OB"));
+by serialno;
+if t1 and t2 then Check=0; /* in both current an prior month EXIST*/
+else if t1 and not t2 then check=1;/*in present not prior ADD*/
+else if t2 and not t1 then check=2;/*in prior not in current DROP*/
+run;
+
+data ab;
+merge ab(in=t1)
+	  cust0810(in=t2 keep=serialno Status);
+by serialno;
+if t1;run;
+
+
+proc sql;
+select check,Status,count(serialno) as CNT
+from ab
+group by check,status;
+quit;
+
+proc sql;
+select check,count(serialno) as CNT
+from ab
+group by check;
+quit;
+
+
+
+proc sql;
+select stat,Status,count(serialno) as CNT
+from Cust_OB 
+group by stat,status;
+quit;
+
+proc sql;
+select stat,count(serialno) as CNT
+from Cust_OB 
+group by stat;
+quit;
+
+
+data _null_;
+array bk{5} $ ('OB','WO','PO','CO','NA');
+	do i=1 to 5;
+	call symputx("bk"||put(i,1.),strip(bk{i}));
+	end;
+run;
+
+%macro Books;
+%do r=1 %to 5; 
+
+	data Cust_&&bk&r (drop=bk);
+	merge cust0810(in=t1 where=(book1="&&bk&r"))
+		  cust0809(in=t2 keep=serialno book1 rename=(book1=bk) where=(bk="&&bk&r"));
+	by serialno;
+	if t1 and t2 then Stat=0; /* in both current an prior month EXIST*/
+	else if t1 and not t2 then Stat=1;/*in present not prior ADD*/
+	else if t2 and not t1 then Stat=2;/*in prior not in current DROP*/
+	Book2="&&bk&r";
+	run;
+
+	data Cust_&&bk&r;
+	merge Cust_&&bk&r(in=t1)
+		  cust0810(in=t2);
+	by serialno;
+	if t1;run;
+
+	proc sql ;
+	create table Cust_SUM_&&bk&r as
+	select
+		c003 as YM format=YYMMDD10.,
+		Model_Elig,
+		portfolio,
+		gz_seg1,
+		Book2,
+		book1,
+		book,
+		Stat,
+		Mstr_Status1,
+		Status,
+		Seg_Status,
+		Wo_Flag,
+		irrl_flag,
+		count(serialno)			as count,
+		sum(irrl_balance/1000000)		as irrl_MM,
+		sum(ac28/1000000)		as mcs_MM
+	from
+		Cust_&&bk&r
+	where portfolio In("AF","PL","WC","XS")
+	group by
+		YM,
+		Model_Elig,
+		portfolio,
+		gz_seg1,
+		gz_seg,
+		Book2,
+		book1,
+		book,
+		Stat,
+		Mstr_Status1,
+		Status,
+		Seg_Status,
+		Wo_Flag,
+		irrl_flag;
+	quit;
+%end;
+	
+data Cust_SUM_0810;
+set
+%do r =1 %to 5;
+	Cust_SUM_&&bk&r
+%end ;
+;
+run ;
+
+%mend Books;
+%Books
+
+
+
+
+proc sql;
+select Book2,book1,Stat,sum(count)
+from Cust_SUM_0810
+where gz_seg1="A1R"
+group by Book2,book1,Stat;
+quit;
+
+
+proc sql;
+select Book1,stat,count(serialno) as CNT
+from Cust_OB 
+group by Book1,stat;
+quit;
+
+ proc export data=Cust_SUM_0810
+ outfile="~/Cust_SUM_0810.csv"
+ dbms=csv replace;run;
+ 
+ /*wps1*/
+ %macro test;
+data a;
+merge home.cust0812(in=t1 where=(Model_Elig=1))
+	  home.cust0912(in=t2 keep=serialno gz_seg2 book1 irrl_flag1 lt Sol Model_Elig
+				rename=(gz_seg2=gz1 book1=bk1 irrl_flag1=irrlf1 lt=lt1 Sol=Sol1) /*where=(Model_Elig=1)*/);
+by serialno;
+if t1;
+
+Length Status $12;
+
+if gz_seg2="A12R" and gz1="A12R" then do;
+	if book1="OB" then do;
+			 if irrl_flag1="IRRL>=0" and irrlf1="IRRL>=0" and lt1="BKD" then Status="BKD";
+		else if irrl_flag1="IRRL<0"  and irrlf1="IRRL<0" and lt1="BKD" then Status="BKD";
+		else if irrl_flag1="IRRL>=0" and irrlf1="IRRL>=0" and lt1="LI" then Status="LI";
+		else if irrl_flag1="IRRL<0"  and irrlf1="IRRL<0" and lt1="LI" then Status="LI";
+		end;
+	else if book1="OB" and bk1^="OB" then do;
+			 if irrl_flag1="IRRL>=0" and irrlf1="IRRL>=0" then Status=strip(bk1);
+		else if irrl_flag1="IRRL<0"  and irrlf1="IRRL<0" then Status=strip(bk1);
+		end;
+	else if book1="OB" and bk1="OB" then do;
+			 if irrl_flag1="IRRL>=0" and irrlf1="IRRL>=0" and Sol1=1 then Status="SOL";
+		else if irrl_flag1="IRRL<0"  and irrlf1="IRRL<0" and Sol1=1 then Status="SOL";
+		else if irrl_flag1="IRRL>=0" and irrlf1="IRRL>=0" and lt1="nonLI" and Sol1=0 then Status="STAY";
+		else if irrl_flag1="IRRL<0"  and irrlf1="IRRL<0" and lt1="nonLI" and Sol1=0 then Status="STAY";
+		end;
+end;
+run;
+
+	if book1="OB" and bk1="OB" then do;
+		if 		irrl_flag1="IRRL>=0" and irrlf1="IRRL>=0" and lt1="BKD" then Status="BKD";
+		else if irrl_flag1="IRRL<0"  and irrlf1="IRRL<0" and lt1="BKD" then Status="BKD";
+		else if irrl_flag1="IRRL>=0" and irrlf1="IRRL>=0" and lt1="LI" then Status="LI";
+		else if irrl_flag1="IRRL<0"  and irrlf1="IRRL<0" and lt1="LI" then Status="LI";
+		else if irrl_flag1="IRRL>=0" and irrlf1="IRRL>=0" and lt1="nonLI" and Sol1=0 then Status="STAY";
+		else if irrl_flag1="IRRL<0"  and irrlf1="IRRL<0" and lt1="nonLI" and Sol1=0 then Status="STAY";
+		end;
+	else if book1="OB" and bk1="WO" and irrl_flag1="IRRL>=0" and irrlf1="IRRL>=0" then Status="WO";
+	else if book1="OB" and bk1="WO" and irrl_flag1="IRRL<0"  and irrlf1="IRRL<0" then Status="WO";
+	else if book1="OB" and bk1="PO" and irrl_flag1="IRRL>=0" and irrlf1="IRRL>=0" then Status="PO";
+	else if book1="OB" and bk1="PO" and irrl_flag1="IRRL<0"  and irrlf1="IRRL<0" then Status="PO";
+	else if book1="OB" and bk1="OB" and irrl_flag1="IRRL>=0" and irrlf1="IRRL>=0" and Sol1=1 then Status="SOL";
+	else if book1="OB" and bk1="OB" and irrl_flag1="IRRL<0"  and irrlf1="IRRL<0" and Sol1=1 then Status="SOL";
+	end;
+else if gz_seg2="A12R" and gz1^="A12R" then Status=strip(gz1)||'_'||strip(irrlf1);
+
+
+run;
+else if gz_seg2="A12R" and gz1="A12R" then do;
+	if irrl_flag1="IRRL>=0" and irrlf1="IRRL>=0" and lt1="nonLI" then Status="STAY";
+	else if irrl_flag1="IRRL<0"  and irrlf1="IRRL<0" and lt1="nonLI" then Status="STAY";
+	
+	
+	
+	
+	do;
+		if 		irrl_flag1="IRRL>=0" and irrlf1="IRRL>=0" and lt1="BKD" then Status="BKD";
+		else if irrl_flag1="IRRL>=0" and irrlf1="IRRL>=0" and lt1="LI" then Status="LI";
+	end;
+		
+		if irrl_flag1="IRRL>=0" and irrlf1="IRRL>=0" and lt1="nonLI" and Sol1=0 then Status="STAY";
+		else if irrl_flag1="IRRL<0"  and irrlf1="IRRL<0" and lt1="nonLI" and Sol1=0 then Status="STAY";
+
+	
+	else if book1="WO" and bk1="WO" and irrl_flag1="IRRL>=0" and irrlf1="IRRL>=0" and lt1="nonLI" and Sol1=0 then Status="STAY";
+	else if book1="WO" and bk1="WO" and irrl_flag1="IRRL<0"  and irrlf1="IRRL<0" and lt1="nonLI" and Sol1=0 then Status="STAY";
+
+	else if book1="PO" and bk1="PO" and irrl_flag1="IRRL>=0" and irrlf1="IRRL>=0" and lt1="nonLI" and Sol1=0 then Status="STAY";
+	else if book1="PO" and bk1="PO" and irrl_flag1="IRRL<0"  and irrlf1="IRRL<0" and lt1="nonLI" and Sol1=0 then Status="STAY";
+end;
+
+else if gz_seg2="BC" and gz1="BC" then do;
+	 if book1="OB" and bk1="OB" and irrl_flag1="IRRL>=0" and irrlf1="IRRL>=0" and lt1="nonLI" and Sol1=0 then Status="STAY";
+else if book1="OB" and bk1="OB" and irrl_flag1="IRRL<0"  and irrlf1="IRRL<0" and lt1="nonLI" and Sol1=0 then Status="STAY";
+
+else if book1="WO" and bk1="WO" and irrl_flag1="IRRL>=0" and irrlf1="IRRL>=0" and lt1="nonLI" and Sol1=0 then Status="STAY";
+else if book1="WO" and bk1="WO" and irrl_flag1="IRRL<0"  and irrlf1="IRRL<0" and lt1="nonLI" and Sol1=0 then Status="STAY";
+
+else if book1="PO" and bk1="PO" and irrl_flag1="IRRL>=0" and irrlf1="IRRL>=0" and lt1="nonLI" and Sol1=0 then Status="STAY";
+else if book1="PO" and bk1="PO" and irrl_flag1="IRRL<0"  and irrlf1="IRRL<0" and lt1="nonLI" and Sol1=0 then Status="STAY";
+end;
+
+run;
+
+%mend test;
+%test
+
+proc sql;
+select gz_seg2,gz1,irrl_flag1,irrlf1,book1,bk1,lt1,Sol1,status,count(status) as CNT, count(missing(Status)) as Null
+from a
+where model_elig=1
+group by gz_seg2,gz1,irrl_flag1,irrlf1,book1,bk1,lt1,Sol1,status;
+quit;
+
+proc freq data=a;
+tables model_elig / norow nocol nopercent nocum;
+run;
+
+data ab;
+set a;
+where gz_seg2="A12R" and gz1="A12R" and book1="OB" and bk1="OB" and
+		irrl_flag1="IRRL>=0" and irrlf1="IRRL>=0" and lt1="LI" and model_elig=1;
+
+	run;
+	
+			else if irrl_flag1="IRRL<0"  and irrlf1="IRRL<0" and lt1="BKD" then Status="BKD";
+		else if irrl_flag1="IRRL>=0" and irrlf1="IRRL>=0" and lt1="LI" then Status="LI";
+	
+data b;
+set a;
+if gz_seg2="A12R" and gz1="A12R" and book1='OB' and bk1='OB' and irrl_flag1="IRRL>=0" and irrlf1="IRRL>=0" 
+and lt1="nonLI" then wowza="STAY";
+else test=0;
+run;
+
+
+proc freq data=a;
+tables Status / norow nocol nopercent nocum;
+run;
+
+
+proc freq data=a;
+tables model_elig / norow nocol nopercent nocum;
+run;
+
+data a;
+merge home.cust0812(in=t1 /*where=(Model_Elig=1)*/)
+
+
+
+
+
+						else if lt1='BKD' and Sol1=0 then Status="BKD";
+						else if lt1='LI' and Sol1=0 then Status="LI";
+						else if lt1='NonLI' and Sol1=1 then Status="SOL";
+						else if lt1='LI' and Sol1=1 then Status="SOL";
+						else if lt1='BKD' and Sol1=1 then Status="BKD";
+						end;
+					else if book1=ax{&p} and bk1^=ax{&p} and irrl_flag1=irrl{&r} and if1=irrl{&r} and lt1='NonLI' and Sol1=0 then Status=strip(bk1);
+					else if book1=ax{&p} and bk1=ax{&p} and irrl_flag1=irrl{&r} and if1^=irrl{&r} then Status=strip(if1);
+				end;
+				else if gz_seg2=seg{&q} and gz1^=seg{&q} then Status=strip(gz)||'_'||strip(if1);
+				
+		%end;
+	%end;
+%end;
+/*else if gz_seg2^=gz1 then Status=gz1;*/
+
+/*wps2*/
+data _null_;
+	a = mdy(%substr(&&yymm&i,3,2), 1, %substr(&&yymm&i,1,2));
+	b = put(intnx("month", a, 0, "end"), date9.);
+	call symput("eom", b);
+run;
+
+%put EOM = &eom;
+	
+data b;
+merge home.cust0812(in=t1 where=(Model_Elig=1))
+	  home.cust1012(in=t2 keep=c003 serialno gz_seg2 book1 irrl_flag1 lt Sol
+				rename=(gz_seg2=gz1 book1=bk1 irrl_flag1=irrl1 lt=lt1 Sol=Sol1));
+by serialno;
+if t1;
+
+Length Status $15;
+if lt1='BKD' then Status='01:BKD';
+else if lt1='LI' then Status='02:LI';
+else if book1^=bk1 and Sol1=0 then Status="03:"||strip(bk1);
+else if Sol1=1 then Status='04:SOL';
+else if gz_seg2^=gz1 then Status="05:"||strip(gz1)||"_"||strip(irrl1);
+else if irrl_flag1^=irrl1 then Status="06:"||strip(irrl1);
+else if gz_seg2=gz1 and book1=bk1 and lt1='nonLI' then Status="07:STAY";
+
+/*カット時点に生きてた口座で、経過年数になくなる場合*/
+/*if c003^=&eom then c003=&eom;
+*/
+run;
+
+proc sql;
+create table Y0_out as
+select   c003 as YM format=YYMMDD10.,
+		gz_seg2,irrl_flag1,book1,
+		count(serialno) as CNT, 
+		sum(irrl_balance/1000000)	as irrl_MM,
+		sum(ac28/1000000)	as mcs_MM
+from home.cust0812
+where model_elig=1
+group by YM,gz_seg2,irrl_flag1,book1;
+quit;
+
+proc sql;
+create table b_out as
+select   c003 as YM format=YYMMDD10.,
+		gz_seg2,irrl_flag1,book1,status,
+		count(status) as CNT, 
+		sum(irrl_balance/1000000)	as irrl_MM,
+		sum(ac28/1000000)	as mcs_MM
+from b
+where model_elig=1
+group by YM,gz_seg2,irrl_flag1,book1,Status;
+quit;
+
+
+data Performance;
+set
+Y0_out
+a_out
+b_out;
+run;
+
+proc export data = Performance
+OUTFILE= "~/Performance.csv"
+dbms = csv replace ;
+run ;
+
+data test;
+set a;
+where c003='31dec2008'd;
+run;
+
+
+proc freq data=b;
+tables status / norow nocol nopercent;
+where Model_elig=1;
+run;
+
+proc freq data=a;
+tables model / norow nocol nopercent;
+where Model_elig=1;
+run;
+
+proc sql;
+select book1,lt1,count(lt1) as CNT
+from a
+where model_elig=1
+group by book1,lt1;
+quit;
+
+proc freq data=a;
+tables Sol1 / norow nocol nopercent;
+where Model_elig=1;
+run;
+
+%let i=120;
+data _null_;
+	a = mdy(%substr(&&yymm&i,3,2), 1, %substr(&&yymm&i,1,2));
+	b = put(intnx("month", a, 0, "end"), date9.);
+	call symput("eom_unformated",a);
+	call symput("eom_formated", b);
+run;
+%put &eom_unformated;
+%put &eom_formated;
+
+data aa;
+set a(keep=c003 model_elig where=(model_elig=1));
+q=input("&eom_formated",date9.);
+/*q=&eom_unformated*1;*/
+if c003^=q then check=1;
+else check=0;
+if check;
+run;
+
+%put &a;
+%put &b;
+%put &&yymm&i;
+
+
+
+data aa;
+q=&eom_unformated*1;run;
+format q date9;run;
+data aa;
+q=input(&eom_unformated*1,date9.);
+run;
+
+data aa;
+q="&eom_formated";
+p=input(q,date9.);
+r=input("&eom_formated",date9.);
+run;
+
+
+q=mdy(substr(&&yymm&i,3,2), 1, substr(&&yymm&i,1,2));output;
+q=mdy(substr("0912",3,2), 1, substr("0912",1,2));output;
+run;
+
+
+data Performance;
+set
+cust_out0812
+cust_out0912
+cust_out1012;
+run;
+
+proc export data = Performance
+OUTFILE= "~/Performance.csv"
+dbms = csv replace ;
+run ;
+
+
+%put &s_cut;
+%put &e_cut;
+
+
+data dummy_&&yymm&s_cut.._&&yymm&e_cut;
+a=1;
+run;
+
+%put %&i;
+
+
+
+proc sql;
+create table LI_Metadata as
+select memname,nobs,nvar,crdate
+from dictionary.tables
+where libname='L2' and upcase(memname) like 'LI____';
+quit;
+
+proc export data = LI_Metadata
+OUTFILE= "~/LI_Metadata.csv"
+dbms = csv replace ;
+run ;
+
+
+proc sql;
+create table Where_CYYMM199_1 as
+   select libname, memname, name,nobs,filesize
+   from dictionary.columns
+   where upcase(name) like 'C____199' and libname='RISKLIB'; 
+quit; 
+
+
+
+/****20160205 WORK ****/
+%let p=109; /*901*/
+
+%macro test;
+%do i=&p %to 120; 
+	data LI&&yymm&i(keep=serialno li003 Sol Lt);
+	merge home.cust0812(in=t1 keep=serialno model_elig where=(model_elig=1))
+			l2.LI&&yymm&i(in=t2 keep=serialno li002 li003 li005 Book passed_bucket where=(li002=1));
+	by serialno;
+	if t1 and t2;
+
+	/***** Book修正 *****/
+	if substr(book,1,2)="PO" and passed_bucket in("10<=Year<11","11<=Year<12","12<=Year<13","13<=Year<14","14<=Year<15","15<=Year") then Book="PO10Y";
+	else if book="WO" and passed_bucket in("10<=Year<11","11<=Year<12","12<=Year<13","13<=Year<14","14<=Year<15","15<=Year") then Book="WO10Y";
+	
+	if Book='PO10Y' or Book='WO10Y' then Sol=1;else Sol=0;
+
+	/***** Pure LI/BKO *****/
+	Length Lt $5;
+	if li005<=2 and li005>0 then Lt="BKD";
+	else if li005>2 then Lt="LI";
+
+	run;
+%end;
+
+proc sql;
+drop table LI0912;quit;
+
+data LI;
+set
+	%do i=&p %to 120;
+	LI&&yymm&i
+	%end;
+;
+run;
+
+proc sort data=LI;by serialno li003;run;
+%mend test;
+%test
+
+data LI_unique;
+set LI;
+by serialno;
+if first.serialno;run; /*重複の場合、早い方で特定*/
+
+
+
+proc freq data=li_unique;
+tables Sol*Lt / nocol norow nopercent;
+run;
+
+proc freq data=li;
+tables good*li002 /norow nocol nopercent;
+run;
+
+
+
+
+
+
+
+proc freq data=a;
+tables Sol*Lt / nocol norow nopercent;
+where model_elig=1;
+run;
+
+
+%put &i;
+%put &q;
+%put &temp;
+%put &e_cut;
+%put &s_cut;
+
+proc sql;
+select count(serialno) as CNT, count(distinct serialno) as Distinct
+from LI;
+quit;
+
+
+%let i=109;
+
+	data _null_;
+	a = mdy(%substr(&&yymm&i,3,2), 1, %substr(&&yymm&i,1,2));
+	b = put(intnx("month", a, 0, "end"), date9.);
+	call symput("eom", b);
+
+		call symput("Start_eom", b);
+		call symput("Start_eom1", put(intnx("month", a, 0, "end"), mmyyn4.));
+
+	run;
+	
+%put &eom;	
+%put &Start_eom;
+%put &Start_eom1;
+
+%macro test;
+%do i=111 %to 192;
+
+	proc datasets lib=work nolist;
+	delete LI&&yymm&i;
+	quit;
+	
+%end;
+%mend test;
+%test
+
+proc delete data=work.LI0902-work.LI1512;run;
+
+
+proc datasets lib=work nolist;/*copy a datafile from one lib to another*/
+copy out=home;
+select Performance_1012;
+select Performance_1212;
+select Performance_1312;quit;
+run;
+
+data home.Performance_ALL;
+set
+Performance_0812
+Performance_0912
+Performance_1012
+Performance_1112
+Performance_1212
+Performance_1312
+Performance_1412;
+run;
+
+
+
+proc export data = home.Performance_ALL
+OUTFILE= "~/Performance_ALL.csv"
+dbms = csv replace ;
+run ;
+
+
+data d;
+merge cust0812(in=t1 where=(Model_Elig=1))
+	  cust0912(in=t2 keep=c003 serialno gz_seg2 book1 irrl_flag1 lt Sol
+				rename=(gz_seg2=gz1 book1=bk1 irrl_flag1=irrl1 lt=lt1 Sol=Sol1));
+by serialno;
+if t1;
+
+Length Status $15;
+if lt1='BKD' then Status="01:BKD"||"_"||strip(irrl1);
+else if Sol1=1 then Status="02:SOL"||"_"||strip(irrl1);
+else if lt1='LI' then Status="03:LI"||"_"||strip(irrl1);
+else if book1^=bk1 then Status="04:"||strip(bk1)||"_"||strip(irrl1);
+else if gz_seg2^=gz1 then Status="05:"||strip(gz1)||"_"||strip(irrl1);
+else if gz_seg2=gz1 and book1=bk1 and lt1='nonLI' then Status="06:STAY"||"_"||strip(irrl1);		
+
+/*カット時点に生きてた口座で、経過年数になくなる場合*/
+/*if c003^=&eom then c003=&eom;
+*/
+run;
+
+title "1212";
+proc freq data=d;
+tables Status / norow nocol nopercent;
+where gz_seg2="A12R" and book1="OB" and irrl_flag1="IRRL<0";
+run;
+
+
+data home.Performance_ALL;
+set
+home.Performance_0812
+home.Performance_0912
+home.Performance_1012
+home.Performance_1112
+home.Performance_1212
+home.Performance_1312
+home.Performance_1412;
+run;
+
+
+proc export data = home.Performance_ALL
+OUTFILE= "~/Performance_ALL.csv"
+dbms = csv replace ;
+run ;
+
+%put _user_;
+
+
+proc freq data=cust_a;
+tables status / nocol norow nopercent;
+run;
+where gz_seg2="A12R" and irrl_flag1="IRRL<0" and book1="PO" and 
+	Status in ("02:SOL_IRRL<0","02:SOL_IRRL>=0","04:OB_IRRL<0","04:OB_IRRL>=0");
+run;
+
+
+
+data home.cust_cut;
+set cust_a;
+where gz_seg2="A12R" and irrl_flag1="IRRL<0" and book1="PO" and 
+	Status in ("02:SOL_IRRL<0","02:SOL_IRRL>=0","04:OB_IRRL<0","04:OB_IRRL>=0");
+run;
+
+
+data home.Performance_check;
+set
+cust_out0812
+cust_out0912
+cust_out1012;
+run;
+
+proc export data =home.Performance_check
+OUTFILE= "~/Performance_check.csv"
+dbms = csv replace ;
+run ;
+
+proc freq data=LI_yr1012;
+tables lt_last*lt / norow nocol nopercent;
+run;
+
+/*201610*/
+proc freq data=LI_yr0912;
+tables Lt / norow nocol nopercent;
+run;
+
+proc freq data=LI_yr1012;
+tables Lt_last*Lt / norow nocol nopercent;
+run;
+
+data a;
+set LI_yr1012;
+where not missing( Lt_last);
+run;
+
+data LI0901(keep=serialno li003 li005 Sol Lt book);
+				merge cust0812(in=t1 keep=serialno model_elig where=(model_elig=1))
+						l2.LI0901(in=t2 keep=serialno li002 li003 li005 Book passed_bucket where=(li002=1)); /*shift LIを除く*/
+				by serialno;
+				if t1 and t2;
+
+				/***** Book修正 *****/
+				if substr(book,1,2)="PO" and passed_bucket in("10<=Year<11","11<=Year<12","12<=Year<13","13<=Year<14","14<=Year<15","15<=Year") then Book="PO10Y";
+				else if book="WO" and passed_bucket in("10<=Year<11","11<=Year<12","12<=Year<13","13<=Year<14","14<=Year<15","15<=Year") then Book="WO10Y";
+				
+				if Book='PO10Y' or Book='WO10Y' then Sol=1;else Sol=0;
+				
+				/***** Pure LI/BKO *****/
+				Length Lt $5;
+				if li005<=2 and li005>0 then Lt="BKD";
+				else if li005>2 then Lt="LI";
+
+				run;
+				
+proc sql;
+select book,sol,count(book) as CNT
+from LI0901
+group by book,sol;
+quit;
+
+proc freq data=li0901;
+tables Sol / norow nocol nopercent;
+run;
+
+proc freq data=cust_a;
+tables Status / norow nocol nopercent;
+where gz_seg2="A12R" and irrl_flag1="IRRL>=0" and book1="OB" and
+status in ("01:BKD_IRRL<0","01:BKD_IRRL>=0","03:LI_IRRL<0","03:LI_IRRL>=0");
+run;
+
+data home.cust_a0912;
+set cust_a;
+run;
+where gz_seg2="A12R" and irrl_flag1="IRRL>=0" and book1="OB" and
+status in ("01:BKD_IRRL<0","01:BKD_IRRL>=0","03:LI_IRRL<0","03:LI_IRRL>=0");
+run;
+
+
+			data Cust_a;
+			merge cust&&yymm&s_cut(in=t1 where=(Model_Elig=1))
+				  cust(in=t2 keep=c003 serialno gz_seg2 book1 irrl_flag1 lt Sol
+							rename=(gz_seg2=gz1 book1=bk1 irrl_flag1=irrl1 lt=lt1 Sol=Sol1));
+			by serialno;
+			if t1;
+
+			Length Status $15;
+			if lt1='BKD' then Status="01:BKD"||"_"||strip(irrl1);
+			else if Sol1=1 then Status="02:SOL"||"_"||strip(irrl1);
+			else if lt1='LI' then Status="03:LI"||"_"||strip(irrl1);
+			else if book1^=bk1 then Status="04:"||strip(bk1)||"_"||strip(irrl1);
+			else if gz_seg2^=gz1 then Status="05:"||strip(gz1)||"_"||strip(irrl1);
+			else if gz_seg2=gz1 and book1=bk1 and lt1='nonLI' then Status="06:STAY"||"_"||strip(irrl1);		
+
+			/*カット時点に生きてた口座で、経過年数になくなる場合*/
+			if c003^=input("&eom",date9.) then c003=input("&eom",date9.);
+			
+			run;
+			
+			
+data A_1012;
+set  home.cust_a1012;
+where gz_seg2="A12R" and irrl_flag1="IRRL>=0" and book1="OB" and
+status in ("01:BKD_IRRL>=0");
+run;
+
+proc freq data=home.cust_a0912;
+tables Status / norow nocol nopercent;
+where gz_seg2="A12R" and irrl_flag1="IRRL>=0" and book1="OB" and
+status in ("01:BKD_IRRL<0","01:BKD_IRRL>=0","03:LI_IRRL<0","03:LI_IRRL>=0");
+run;
+
+data ab;
+merge  A_0912(in=t1 keep=serialno bk1 lt lt1 rename=(lt=lt0812 lt1=lt0912 bk1=bk0912))
+		A_1012(in=t2 keep=serialno bk1 lt1 rename=(lt1=lt1012 bk1=bk1012));
+by serialno;
+if t1 and t2;
+run;
+
+
+data ab_li;
+merge  Li_yr0912(in=t1 keep=serialno Sol lt rename=(Sol=Sol0912 Lt=Lt0912))
+		Li_yr1012(in=t2 keep=serialno Sol lt rename=(Sol=Sol1012 Lt=Lt1012));
+by serialno;
+if t1 and t2;
+run;
+		
+		
+data test1012;
+set A_1012(keep=serialno Sol Sol1 bk1 lt lt1 rename=(Sol=Sol0812 Sol1=Sol1012 lt=lt0812 lt1=lt1012 bk1=bk1012));
+run;
+
+		
+
+data home.Performance_ALL;
+set
+home.performance_0812
+home.performance_0912
+home.performance_1012
+home.performance_1112
+home.performance_1212
+home.performance_1312
+home.performance_1412;
+run;
+		
+proc export data=home.Performance_ALL
+OUTFILE= "~/Performance_ALL.csv"
+dbms = csv replace ;
+run ;
+
+data a;
+b=1;output;
+b=2;output;
+run;
+data a;
+set a;
+if missing(a) and b=1 then a=1;
+run;
+
+
+
+			data a;
+			merge cust0812(in=t1 where=(Model_Elig=1))
+				  cust0912(in=t2 keep=c003 serialno gz_seg2 book1 irrl_flag1 lt Sol
+							rename=(gz_seg2=gz1 book1=bk1 irrl_flag1=irrl1 lt=lt1 Sol=Sol1));
+			by serialno;
+			if t1;
+
+			Length Status $15;
+			if lt1='BKD' then Status="01:BKD"||"_"||strip(irrl1);
+			else if Sol1=1 then Status="02:SOL"||"_"||strip(irrl1);
+			else if lt1='LI' then Status="03:LI"||"_"||strip(irrl1);
+			else if book1^=bk1 then Status="04:"||strip(bk1)||"_"||strip(irrl1);
+			else if gz_seg2^=gz1 then Status="05:"||strip(gz1)||"_"||strip(irrl1);
+			else if gz_seg2=gz1 and book1=bk1 and lt1='nonLI' then Status="06:STAY"||"_"||strip(irrl1);	
+
+			/*カット時点に生きてた口座で、経過年数になくなる場合*/
+			if c003^=input("&eom",date9.) then c003=input("&eom",date9.);
+			
+			run;
+			
+%let i=108;
+
+data _null_;
+	a = mdy(%substr(&&yymm&i,3,2), 1, %substr(&&yymm&i,1,2));
+	b = put(intnx("month", a, 0, "end"), date9.);
+	call symput("eom", a);
+	call symput("eomz", b);
+	call symput("xdate",put(intnx("month", a, 0, "end"), date9.));
+
+	call symput("Start_eom", b);
+	call symput("Start_eom1", put(intnx("month", a, 0, "end"), mmyyn4.));
+	
+	run;
+%put &eom;
+%put &xdate;
+%put &Start_eom;
+%put &Start_eom1;
+
+data a;
+a1=input("&Start_eom",date9.);output;
+a2=intnx("year", input("&Start_eom",date9.), 1, "end");output;
+a3=intnx("year", input("&Start_eom",date9.), 2, "end");output;
+a4=intnx("year", input("&Start_eom",date9.), 3, "end");output;
+a5=intnx("year", input("&Start_eom",date9.), 4, "end");output;
+a6=intnx("year", input("&Start_eom",date9.), 5, "end");output;
+a7=intnx("year", input("&Start_eom",date9.), 6, "end");output;
+a8=intnx("year", input("&Start_eom",date9.), 7, "end");output;
+format a1-a4 date9. a5-a8 yymmdd10.;run;
+
+format a date9. b date9.;
+format c date9. d date9.;
+format a date9. b date9.;
+format e date9. f date9.;
+format g date9. h date9.;
+run;
+
+data c;
+set b;
+do i=1 to 7;
+if col8=intnx("year",input("&Start_eom",date9.) , i, "end") then Vintage_Yr="Y"||strip(i);
+end;
+run;
+
+
+
+proc transpose data=a out=b;
+run;
+data b;
+set b;
+keep _name_ col8;
+run;
+
+
+format a date9.;
+
+c="&Start_eom";output;
+d=&Start_eom1;output;run;
+
+data a;
+set performance_all;
+a=input()
+
+/*wps3*/
+data control;
+set cust1601;
+if  portfolio In("AF","PL","WC","XS") and book in("OB","PO","WO","PO5Y") and gz_seg not in("New_W","W") and 
+		eligible_flag=1 and legal_flag=0 and Clsing_Flag=1;
+run;
+
+
+data test; 
+	merge home.poollist(in=t1) /*事前にpoollistファイルの作成は必要*/
+			  l1.cust1601;
+		by serialno;
+		if t1 then Clsing_Flag=1;/*Add Pool List Flag*/
+		else Clsing_flag=0;
+		
+		if portfolio="AF" then Clsing_Flag=1; /*AFをpool listに追加*/
+
+	if	c188=927 
+	or 	c189=927 
+	or 	c190=927 
+	or 	c191=927 
+	or 	c192=927	then legal_type=3;
+if legal_flag=0 and legal_type=3 then legal_flag=1;
+if legal_type=0 then eligible_flag=1;
+else  eligible_flag=0;
+
+if book="OB" then passed_bucket="0<=Year<1";
+
+	if book="PO" and passed_bucket in("10<=Year<11","11<=Year<12","12<=Year<13","13<=Year<14","14<=Year<15","15<=Year") then Book="PO10Y";
+	if book="WO" and passed_bucket in("10<=Year<11","11<=Year<12","12<=Year<13","13<=Year<14","14<=Year<15","15<=Year") then Book="WO10Y";
+	if book="CO" and passed_bucket in("10<=Year<11","11<=Year<12","12<=Year<13","13<=Year<14","14<=Year<15","15<=Year") then Book="CO10Y";
+	if book="NA" and passed_bucket in("10<=Year<11","11<=Year<12","12<=Year<13","13<=Year<14","14<=Year<15","15<=Year") then Book="NA10Y";
+
+if  portfolio In("AF","PL","WC","XS") and book in("OB","PO","WO","PO5Y") and gz_seg not in("New_W","W") and 
+		eligible_flag=1 and legal_flag=0 and Clsing_Flag=1;
+run;
+
+title "Control";
+proc freq data=control;
+tables book /norow nocol nopercent;
+run;
+
+Title "Test";
+proc freq data=test;
+tables book /norow nocol nopercent;
+run;
+
+
+
+
+	proc sql ;
+	create table test_out as
+	select
+		year(c003) as YR,
+		month(c003) as MO,
+		c003 as YM format=YYMMDD10.,
+		portfolio,
+		gz_seg,
+		book,
+		passed_bucket,
+		sm,
+		Clsing_flag,
+		legal_flag,
+		eligible_flag,
+		count(serialno)			as count
+	
+	from
+		test
+	group by
+		YM,
+		Clsing_flag,
+		portfolio,
+		gz_seg,
+		book,
+		legal_flag,
+		eligible_flag,
+		passed_bucket,
+		sm
+		;
+	quit ;
+	
+	
+proc export data = test_out
+OUTFILE= "~/test_out.csv"
+dbms = csv replace ;
+run ;
+
+
+
+where  portfolio In("AF","PL","WC","XS") and book in("OB","PO","WO","PO5Y") and gz_seg not in("New_W","W") and 
+		eligible_flag=1 and legal_flag=0;
+		
+		
+		
+data a;
+a=1;output;
+a=0;output;
+a=1;output;
+a=0;output;
+run;
+
+data a;
+set a;
+b=(a=1);
+run;
+
+/*wps4*/
+data control;
+set cust1601;
+if  portfolio In("AF","PL","WC","XS") and book in("OB","PO","WO","PO5Y") and gz_seg not in("New_W","W") and 
+		eligible_flag=1 and legal_flag=0 and Clsing_Flag=1;
+run;
+
+
+data test1603; 
+	merge home.poollist(in=t1) /*事前にpoollistファイルの作成は必要*/
+			  l1.cust1603;
+		by serialno;
+		if t1 then Clsing_Flag=1;/*Add Pool List Flag*/
+		else Clsing_flag=0;
+		
+		if portfolio="AF" then Clsing_Flag=1; /*AFをpool listに追加*/
+/**************/
+	/***** Legal Type *****/
+	array bl(*) c027 - c031 ;
+	do i=1 to dim(bl);
+	if bl(i)=1 then do;
+		legal_type=1;
+		go to Next;
+		end;
+	end;
+	
+	Next:
+	array c(*) c188 - c192 ;
+	do i=1 to dim(c);
+	if c(i)=1 then do;
+		legal_type=1.5;
+		go to Next1;
+		end;
+	end;
+		
+	Next1:
+	if	bl(1)=2 
+	or	bl(2)=2
+	or	bl(3)=2
+	or	bl(4)=2
+	or	bl(5)=2				then	legal_type=2 ;
+
+	else if bl(1) in (42,75) 
+	or 	bl(2) in (42,75) 
+	or 	bl(3) in (42,75) 
+	or	bl(4) in (42,75)
+	or 	bl(5) in (42,75) 		
+
+	or	c188 =927 
+	or      c189 =927 
+	or      c190 =927 
+	or      c191 =927 
+	or      c192 =927  			
+						then    legal_type=3 ;
+
+	else if bl(1) in (19,20,79) 
+	or 	bl(2) in (19,20,79) 
+	or 	bl(3) in (19,20,79) 
+	or	bl(4) in (19,20,79) 
+	or 	bl(5) in (19,20,79) 		then	legal_type=4 ;
+
+	else if bl(1) in (70,74) 
+	or 	bl(2) in (70,74) 
+	or 	bl(3) in (70,74) 
+	or	bl(4) in (70,74) 
+	or 	bl(5) in (70,74)		then	legal_type=5 ;
+
+	else if bl(1) in (5,41,56) 
+	or 	bl(2) in (5,41,56) 
+	or 	bl(3) in (5,41,56) 
+	or	bl(4) in (5,41,56) 
+	or 	bl(5) in (5,41,56)		then	legal_type=6 ;
+
+	else if bl(1) in (55,77) 
+	or 	bl(2) in (55,77)
+	or	bl(3) in (55,77)
+	or	bl(4) in (55,77) 
+	or 	bl(5) in (55,77) 		then	legal_type=7 ;
+
+	else if bl(1) in (80,81) 
+	or 	bl(2) in (80,81) 
+	or 	bl(3) in (80,81) 
+	or	bl(4) in (80,81) 
+	or 	bl(5) in (80,81) 		then	legal_type=8 ;
+
+	else						legal_type=0 ;
+	
+/***** Legal Type *****/
+	array bl2(*) c027 - c031 ;
+	if	bl2(1)=1 
+	or 	bl2(2)=1 
+	or 	bl2(3)=1 
+	or 	bl2(4)=1 
+	or 	bl2(5)=1				then	legal_type2=1 ;
+
+	else if	c188=238 
+	or	c189=238 
+	or	c190=238 
+	or	c191=238 
+	or	c192=238			then	legal_type2=1.5 ; 
+
+
+	else if	bl2(1)=2 
+	or	bl2(2)=2
+	or	bl2(3)=2
+	or	bl2(4)=2
+	or	bl2(5)=2				then	legal_type2=2 ;
+
+	else if bl2(1) in (42,75) 
+	or 	bl2(2) in (42,75) 
+	or 	bl2(3) in (42,75) 
+	or	bl2(4) in (42,75)
+	or 	bl2(5) in (42,75) 		
+			
+						then    legal_type2=3 ;
+
+	else if bl2(1) in (19,20,79) 
+	or 	bl2(2) in (19,20,79) 
+	or 	bl2(3) in (19,20,79) 
+	or	bl2(4) in (19,20,79) 
+	or 	bl2(5) in (19,20,79) 		then	legal_type2=4 ;
+
+	else if bl2(1) in (70,74) 
+	or 	bl2(2) in (70,74) 
+	or 	bl2(3) in (70,74) 
+	or	bl2(4) in (70,74) 
+	or 	bl2(5) in (70,74)		then	legal_type2=5 ;
+
+	else if bl2(1) in (5,41,56) 
+	or 	bl2(2) in (5,41,56) 
+	or 	bl2(3) in (5,41,56) 
+	or	bl2(4) in (5,41,56) 
+	or 	bl2(5) in (5,41,56)		then	legal_type2=6 ;
+
+	else if bl2(1) in (55,77) 
+	or 	bl2(2) in (55,77)
+	or	bl2(3) in (55,77)
+	or	bl2(4) in (55,77) 
+	or 	bl2(5) in (55,77) 		then	legal_type2=7 ;
+
+	else if bl2(1) in (80,81) 
+	or 	bl2(2) in (80,81) 
+	or 	bl2(3) in (80,81) 
+	or	bl2(4) in (80,81) 
+	or 	bl2(5) in (80,81) 		then	legal_type2=8 ;
+
+	else						legal_type2=0 ;
+
+	/***** Legal Flag *****/
+	legal_flag_new = (3 <= legal_type <= 8) ;
+	legal_flag_old = (3 <= legal_type2 <= 8) ;
+
+	/***** Eligible Flag *****/
+	eligible_flag_new = ( legal_type=0 ) ;
+	eligible_flag_old = ( legal_type2=0 ) ;
+
+if book="OB" then passed_bucket="0<=Year<1";
+
+	if book="PO" and passed_bucket in("10<=Year<11","11<=Year<12","12<=Year<13","13<=Year<14","14<=Year<15","15<=Year") then Book="PO10Y";
+	if book="WO" and passed_bucket in("10<=Year<11","11<=Year<12","12<=Year<13","13<=Year<14","14<=Year<15","15<=Year") then Book="WO10Y";
+	if book="CO" and passed_bucket in("10<=Year<11","11<=Year<12","12<=Year<13","13<=Year<14","14<=Year<15","15<=Year") then Book="CO10Y";
+	if book="NA" and passed_bucket in("10<=Year<11","11<=Year<12","12<=Year<13","13<=Year<14","14<=Year<15","15<=Year") then Book="NA10Y";
+
+if  portfolio In("AF","PL","WC","XS") and book in("OB","PO","WO","PO5Y") and gz_seg not in("New_W","W") and 
+		eligible_flag=1 and legal_flag=0 and Clsing_Flag=1 then EligOLD=1;
+else ELIGOLD=0;
+
+if  portfolio In("AF","PL","WC","XS") and book in("OB","PO","WO","PO5Y") and gz_seg not in("New_W","W") and 
+		eligible_flag_old=1 and legal_flag_old=0 and Clsing_Flag=1 then Eligtest=1;
+else ELIGtest=0;
+
+if  portfolio In("AF","PL","WC","XS") and book in("OB","PO","WO","PO5Y") and gz_seg not in("New_W","W") and 
+		eligible_flag_new=1 and legal_flag_new=0 and Clsing_Flag=1 then EligNEW=1;
+else ELIGNEW=0;
+
+run;
+
+Title "as-is1603";
+proc freq data=test1603;
+tables book /norow nocol nopercent;
+where ELIGOLD=1;
+run;
+
+Title "test1603";
+proc freq data=test1603;
+tables  book /norow nocol nopercent;
+where Eligtest=1;
+run;
+
+Title "New1603";
+proc freq data=test1603;
+tables  book /norow nocol nopercent;
+where EligNEW=1;
+run;
+
+
+
+
+title "Control";
+proc freq data=control;
+tables book /norow nocol nopercent;
+run;
+
+Title "Test";
+proc freq data=test;
+tables book /norow nocol nopercent;
+run;
+
+
+
+
+	proc sql ;
+	create table test_out as
+	select
+		year(c003) as YR,
+		month(c003) as MO,
+		c003 as YM format=YYMMDD10.,
+		portfolio,
+		gz_seg,
+		book,
+		passed_bucket,
+		sm,
+		Clsing_flag,
+		legal_flag,
+		eligible_flag,
+		count(serialno)			as count
+	
+	from
+		test
+	group by
+		YM,
+		Clsing_flag,
+		portfolio,
+		gz_seg,
+		book,
+		legal_flag,
+		eligible_flag,
+		passed_bucket,
+		sm
+		;
+	quit ;
+	
+	
+proc export data = test_out
+OUTFILE= "~/test_out.csv"
+dbms = csv replace ;
+run ;
+
+
+
+where  portfolio In("AF","PL","WC","XS") and book in("OB","PO","WO","PO5Y") and gz_seg not in("New_W","W") and 
+		eligible_flag=1 and legal_flag=0;
+		
+		
+		
+data a;
+a=1;output;
+a=0;output;
+a=1;output;
+a=0;output;
+run;
+
+data a;
+set a;
+b=(a=1);
+run;
+
+
+data home.kouho_all;
+set kouho_all;
+run;
+data home.wakai_li1;
+set wakai_li1;
+run;
+data home.wakai_li2;
+set wakai_li2;
+run;
+data home.wakai_li3;
+set wakai_li3;
+run;
+
+proc export data =home.kouho_all
+OUTFILE= "~/kousv.csv"
+dbms = csv replace ;
+run ;
+
+data kouho_all;
+set home.kouho_all;
+run;
+data wakai_li1;
+set home.wakai_li1;
+run;
+data wakai_li2;
+set home.wakai_li2;
+run;
+data wakai_li3;
+set home.wakai_li3;
+run;
+
+/*sbnp*/
+options nomprint;
+
+libname 	home	"~/";
+libname	l5		"/share/sfrisk/legal/5_kabarai" ;
+libname ddb '~/dairi_DB';
+
+%include "/odd/lib/sf-dwh.key";
+
+/*Exploratory*/
+proc sql;
+create table SBNP_Metadata as
+select memname,nobs,nvar,crdate
+from dictionary.tables
+where libname='L5' and substr(memname,1,4)='SBNP';
+quit;
+/*************/
+
+
+/*%%%%%%%%%% CP Manual Update %%%%%%%%%%*/
+
+/* yymm161=1305 */
+/* yymm175=1407
+   yymm176=1408
+   yymm177=1409*/
+
+%let s_cut = 146 ;  	/*CHANGE*/
+%let e_cut = 182 ;		/*CHANGE*/
+
+
+/*** Initial Date ***/
+%let ST='01jan2000'd; 	/*Note: '01jan2000'd --> s_cut=1*/
+       
+data _null_;		/*n= months elapsed from s_cut=1 to today() nはs_cut=1～本日の間の経過月数*/
+        call symput ("n",intck("month",&ST-1,intnx('day',intnx('month',today(),0),-1))) ;
+run;
+
+/***** Check *****/
+%put %nrstr(&n =) &n;
+data _null_;	/*creates monthly macvar series from '01jan2000'd to today()*/
+	%macro YM1;
+		%do i= 0 %to &n ;
+			call symput("yymm&i" ,put(intnx("month",&ST-1,%eval(&i),"end"),yymmdd4.));
+		%end;
+	%mend YM1;
+	%YM1
+run;
+
+%macro YM2 ; /*output to log all yymm&i macvar*/
+	%do i= 0 %to &n ;
+		%put yymm&i = &&yymm&i;
+	%end ;
+%mend YM2;
+%YM2 
+
+
+/**********/
+%macro SBNP;
+
+%do i = &s_cut %to &e_cut;
+
+data	sbnp_lsc&&yymm&i;
+	set l5.sbnp_lsc&&yymm&i;
+if year(Payout_Agreed_Month)>year(CP_Month) then Months=month(Payout_Agreed_Month)-month(CP_Month)+12;
+else Months=month(Payout_Agreed_Month)-month(CP_Month);
+
+Payout_Amount=Payout_Amount*(-1);
+
+length Payout_Range $10;
+if Payout_Amount<500001 then Payout_Range='0 - 0.5';
+else if Payout_Amount<1000001  then Payout_Range='0.5 - 1.0';
+else if Payout_Amount<1500001  then Payout_Range='1.0 - 1.5';
+else if Payout_Amount<2000001  then Payout_Range='1.5 - 2.0';
+else Payout_Range='> 2.0';
+
+*Payout_AMT_MM=Payout_Amount/1000000;
+where portfolio in('AF','PL','XS','WC');
+run;
+
+
+
+/*%%%%%%%%%%%%%%%%   START Law Office Names   %%%%%%%%%%%%%%%%%*/
+ 
+/* ----------Agent_noで代理人DBと結合する為、介入DBを参照し、InventoryファイルにAgent_Noを作成---------	*/
+	data _null_;
+		a = mdy(%substr(&&yymm&i,3,2), 1, %substr(&&yymm&i,1,2));
+		/*b = put(a, date9.); delete*/
+		b = put(intnx("month", a, 0, "end"), date9.);
+		call symput("eom", b);
+	run;
+
+	%put EOM = &eom;
+
+%if &i=&s_cut %then %do;
+data work.li(rename=(
+			_COL0 = no
+			_COL1 = serialno
+			_COL3 = l_no	/*弁護士番号*/
+			_COL4 = l_in_date	/*弁護士介入年月日*/
+			_COL5 = l_out_date	/*弁護士辞任年月日*/
+			_COL6 = s_no	/*司法書士番号*/
+			_COL7 = s_in_date	/*司法書士介入年月日*/
+			_COL8 = s_out_date));	/*司法書士辞任年月日*/
+set oralib.TBN_SBSHKREC(drop=_COL2) /*店番*/;	/* 介入DB */
+run;
+
+data work.li;
+	set work.li;
+if l_no ne 0 then do;
+	if datepart(l_in_date) <= "&eom"d <= datepart(l_out_date) then
+		agent_no = compress("L" || l_no); end;
+
+if agent_no = '' and s_no ne 0 then do;
+	if datepart(s_in_date) <= "&eom"d <= datepart(s_out_date) then
+		agent_no = compress("S" || s_no);end;
+		
+RP= (agent_no = '');		/* Right Party フラグ */
+run;
+proc sort data=work.li; by serialno;run;
+%end;
+
+%else %if &i>&s_cut %then %do;
+data work.li;
+	set work.li;
+
+if l_no ne 0 then do;
+	if datepart(l_in_date) <= "&eom"d <= datepart(l_out_date) then
+		agent_no = compress("L" || l_no); end;
+
+if agent_no = '' and s_no ne 0 then do;
+	if datepart(s_in_date) <= "&eom"d <= datepart(s_out_date) then
+		agent_no = compress("S" || s_no); end;
+		
+RP= (agent_no = '');		/* Right Party フラグ */
+run;
+
+%end;
+
+proc sort data=sbnp_lsc&&yymm&i;by serialno;run;
+
+data sbnp_lsc&&yymm&i;
+merge  sbnp_lsc&&yymm&i(in=t1) 
+		work.li (in=t2 keep=serialno agent_no);
+by serialno;
+if t1;
+run;
+
+
+/* ------------------------最新代理人DBと結合------------------------*/
+proc sort data=sbnp_lsc&&yymm&i; by agent_no;run;	
+
+data sbnp_lsc&&yymm&i;
+		merge	sbnp_lsc&&yymm&i(in=t1)
+			ddb.ddb1502(keep=Agent_No GC GN);			/*CHANGE*/  
+		by	agent_no;
+if t1; 				/*新宿グループ*/
+if  GC='G10' or 	/*G10	G_新宿事務所*/
+	GC='G5455' or	/*G5455	G_東京新宿法律事務所*/
+	GC='G6255' or	/*G6255	G_有岡法律事務所*/
+	GC='G1366' or	/*G1366	G_ＭａｒｔｉａｌＡｒｔｓ*/
+	GC='G24776' or	/*G24776	G_法律事務所ナビアス*/
+	GC='G5071'		/*G5071	G_大江戸下町法律事務所*/
+	then Jimusho='Shinjuku';
+else  Jimusho='Other';
+	run;
+
+/*%%%%%%%%%%%%%%%%   FIN Law Office Names   %%%%%%%%%%%%%%%%%*/
+
+
+proc sql;
+create table sbnp&&yymm&i as 
+select 	&&yymm&i as YYMM,Claim_Type,portfolio,gz_seg,Months,Payout_Range,Agent_No,
+		count(Serialno) as CNT,sum(Payout_Amount)/1000000 as Payout_AMT_MM,-sum(Max_IRRL_Bal)/1000000 as Max_IRRL_MM
+from sbnp_lsc&&yymm&i
+group by Claim_Type,portfolio,gz_seg,Months,Payout_Range,Agent_No
+order by Claim_Type,portfolio,gz_seg,Months,Payout_Range,Agent_No;quit;
+
+%end;
+
+data	sum_SBNP;
+set
+	%do i = &s_cut %to &e_cut ;
+	sbnp&&yymm&i
+	%end ;
+	;
+run ;
+
+proc sort data=sum_SBNP;by agent_no;run;
+
+data sum_SBNP3;
+		merge	sum_SBNP(in=t1)
+			ddb.ddb1502(keep=Agent_No GC GN);			/*CHANGE*/  
+		by	agent_no;
+if t1;
+if  GC='G10' or 	/*G10	G_新宿事務所*/
+	GC='G5455' or	/*G5455	G_東京新宿法律事務所*/
+	GC='G6255' or	/*G6255	G_有岡法律事務所*/
+	GC='G1366' or	/*G1366	G_ＭａｒｔｉａｌＡｒｔｓ*/
+	GC='G24776' or	/*G24776	G_法律事務所ナビアス*/
+	GC='G5071'		/*G5071	G_大江戸下町法律事務所*/
+	then Jimusho='Shinjuku';
+else if GC not in 
+('G2','G6','G1','G7','G12','G14','G5443','G5','G18','G6651','G3','G901','G119','G9','G6004','G23','G4588','G9034','G10212','G8748','G8204','G7695','G4818','G10142')
+then Jimusho='Other';
+else Jimusho=GN;
+
+RP= (agent_no = '');
+run;
+
+
+%mend SBNP;
+
+%sbnp
+/**********/
+
+proc export data =sum_SBNP3
+OUTFILE= "~/all_SBNP.csv" /*CHANGE*/
+dbms = csv replace ;
+run;
+
+
+
+/**CURRENT MONTH OUTPUT***/
+%let i=182;
+proc sql;
+create table aa as 
+select 	Claim_Type,portfolio,gz_seg,Months,Payout_Range,
+		count(Serialno) as CNT,sum(Payout_AMT_MM) as Payout_AMT_MM,-sum(Max_IRRL_Bal)/1000000 as Max_IRRL_MM
+from sbnp_lsc&&yymm&i
+group by Claim_Type,portfolio,gz_seg,Months,Payout_Range
+order by Claim_Type,portfolio,gz_seg,Months,Payout_Range;
+quit;
+
+
+proc export data =sbnp_lsc1501
+OUTFILE= "~/sbnp1502.csv" /*CHANGE*/
+dbms = csv replace ;
+run;
+
+
+/**ALL GRAPH OUTPUT***/
+filename SBNP "~/"; 
+
+/*	data _null_;
+		Start = mdy(%substr(&&yymm&s_cut,3,2), 1, %substr(&&yymm&s_cut,1,2));
+		call symput("Start_Date",put(intnx("month", start, 0, "end"), YYMMDDn8.));
+	run;
+	
+%put &&yymm&i &Start_Date;*/
+
+
+proc template;
+  define style styles.PK_CTheme1;
+  parent=styles.default;
+    class graphbackground / color=white;
+    class graphwalls / color=white;
+	class graphlegendbackground / color=white;
+	*class graphgridlines / linestyle=2 linethickness=50px;/*<< confirm change*/
+	class graphdata1 /color=CX008B8B contrastcolor=CX4dbfbc;
+	class graphdata2 /color=CXdaa520 contrastcolor=CXb8860b;
+	class graphdata3 /color=CXb22222 contrastcolor=CXcd5c5c;
+	class graphdata4 /color=CX58963C contrastcolor=CX008000;
+	class graphdata5 /color=CXA0522D contrastcolor=CXA0522D;
+	class graphdata6 /color=CX475A8D contrastcolor=CX475A8D;
+  end;
+run;
+ 
+ods trace on;
+ods graphics on / reset=all imagefmt=jpeg imagemap=on width=1140px height=400px noborder
+				  imagename='SBNP';
+ods listing image_dpi=300 sge=on gpath=sbnp style=PK_CTheme1;
+ods select all;
+
+*goptions colors=(CX008B8B CXdaa520 CXb22222);
+
+%let i=&s_cut;
+%let j=&e_cut;	
+
+proc sgplot data=sum_SBNP3;
+vbar YYMM / group=Claim_type response=Payout_AMT_MM stat=sum barwidth=.7;
+vline YYMM / group=Claim_type response=CNT stat=sum y2axis lineattrs=(pattern=solid thickness=3) transparency=.2;
+yaxis values=(0 to 10000 by 1000) grid label="Payout (JPY MM)";
+*refline 5000 / axis=y;
+refline 10000 9000 8000 7000 6000 5000 4000 3000 2000 1000 / yaxis;
+xaxis fitpolicy=thin;
+y2axis values=(0 to 10000 by 2000) label="Accounts (Count)";
+keylegend /location=inside position=ne across=2 down=2 border;
+title "SBNP Totals 20&&yymm&i to 20&&yymm&j";
+run;
+
+/*
+proc sgplot data=sum_SBNP3;
+vbar YYMM / group=Jimusho response=Payout_AMT_MM stat=sum barwidth=.7;
+*vline YYMM / group=Claim_type response=CNT stat=sum y2axis lineattrs=(pattern=solid thickness=3) transparency=.2;
+yaxis values=(0 to 10000 by 1000) grid label="Payout (JPY MM)";
+*refline 5000 / axis=y;
+xaxis fitpolicy=thin;
+*y2axis values=(0 to 10000 by 2000) label="Accounts (Count)";
+keylegend /location=inside position=ne across=2 down=2 border;
+title "SBNP Totals 20&&yymm&i to 20&&yymm&j by Law Office";
+run;*/
+
+/**Exploratory**/
+proc freq data=sbnp_lsc1411;
+tables Months /norow nopercent nocol norow;
+run;
+
+proc means data=sbnp_lsc1411 n sum;
+var Payout_AMT_MM;
+class Months;
+run;
+
+
+
+/****/
+
+
+%let i=&s_cut;
+%put %sysfunc(mdy(%substr(strip(&&yymm&i),3,2),1,%substr(strip(&&yymm&i),1,2)),yymmn4.);
+
+data aa;
+x=strip(&&yymm&i);
+y=mdy(substr(strip(&&yymm&i),3,2),1,substr(strip(&&yymm&i),1,2));
+format y yymmn4.;
+run;
