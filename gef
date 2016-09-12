@@ -1,0 +1,683 @@
+/*flip work*/
+proc freq data=cust;
+tables book /norow nocol nopercent nocum;
+ods output cust_freq;
+run;
+
+
+data work.cust;
+	set risklib.cust9908(keep = serialno c9908042 c9908047 c9908145 c9908143
+			      rename = (c9908042 = first_loan_date
+					c9908047 = balance
+					c9908145 = wo_date
+					c9908143 = paid_off_date));
+	where	first_loan_date <= '1Nov1998'd;
+
+	length book $8.;
+	if wo_date <= '1nov1998'd and (wo_date^=0 or wo_date^=.) then			book = 'W/O';
+	else if paid_off_date <= '1Nov1998'd and (paid_off_date^=0 or paid_off_date^=.) then	book = 'Paid_Off';
+	else						book = 'On Book';
+run;
+
+proc freq data=cust;
+tables book /norow nocol nopercent nocum;
+run;
+
+
+proc freq data=cust_ac;
+	tables book * flip / nocol norow nopercent;
+run;
+
+proc sort data=aa out=ab;by Saisyu_Trx;run;
+
+proc sql;
+create table test as
+select count(serialno) as Cnt, count(distinct serialno) as Dist
+from master.acco_master1501;
+quit;
+
+data work.acco_master1501;
+	set master.acco_master1501(keep=serialno ac65 rename=(ac65=Saisyu_Trx));
+run;
+
+proc sort data=work.acco_master1501;by serialno;run;
+
+data work.acco_master1501;
+set work.acco_master1501;
+by serialno;
+if last.serialno then Last=1;else Last=0;run;
+
+proc sql;
+create table work.acco_master1501 as
+select 
+
+proc sort data=master.acco_master1501(keep=serialno ac65 rename=(ac65=Saisyu_Trx))
+		   out=work.acco_master;
+		   by serialno descending Saisyu_Trx nodupkey;
+run;
+
+from master.acco_master1501(keep=serialno ac65 rename=(ac65=Saisyu_Trx))
+order
+
+
+
+data aa;
+x=1;date='27feb2005'd;output;
+x=2;date='27feb2010'd;output;
+x=3;date='27feb2000'd;output;
+format date YYMMDD8.;
+run;
+
+
+data aa;
+set aa;
+*length SOL_Flag $7.;
+test=intnx('year',date,10,'sameday'); /*CHANGE*/
+format test YYMMDD8.;
+*if intnx('year',Saisyu_Trx,10,'same day')+1>'28feb2015'd then SOL_Flag='not_SOL'; /*CHANGE*/
+*else SOL_Flag='SOL';
+run;
+
+
+
+/******/
+data aa;
+set gz_sol;
+if gz_wakai = 'No' and irrl_flag='-' and SOL_Flag='not_SOL';
+run;
+
+
+data aa;
+set aa;
+if wakai_date=0 and Kabarai<=0 then test=1;
+else test=0;run;
+proc sort data=aa;by test;run;
+
+
+proc sql;
+create table ab as
+select count(serialno) as Cnt,sum(Kabarai)/1000000 as Kabarai_MM
+from aa;
+quit;
+
+
+
+proc means data=aa n sum;
+var serialno Kabarai;
+by Test;
+run;
+
+
+proc sort data=aa out=ac;
+by first_loan_date;
+where test=1;run;
+
+/******/
+
+
+where test=1;
+
+
+
+proc sort data=aa out=ab;
+by test;
+where test=1;run;
+
+proc sql;
+create table ab as
+select 
+from aa
+
+
+
+data aa;
+x=1;date='27feb2005'd;output;
+x=2;date='27feb2010'd;output;
+x=3;date='27feb2000'd;output;
+format date YYMMDD8.;
+run;
+
+
+data aa;
+set aa;
+length y $2. test 3.;
+if x=1 then do; y='A';test=x*24;end;
+else if x=2 then do; y='BB';test=x*24;end;
+else if x=3 then do; y='ABC';test=x*24;end;
+run;
+
+proc format;
+   value clsfmt 1='Freshman' 2='Sophmore' 3='Junior' 4='Senior';
+run;
+
+data class;
+   format z clsfmt.;
+   label x='ID NUMBER'
+      y='AGE'
+      z='CLASS STATUS';
+   input x y z;
+datalines;
+1 20 4
+2 18 1
+;
+
+proc datasets lib=work;
+   modify class;
+     attrib _all_ label='';
+run;
+
+
+proc sort data = risklib.convert out = convert ;
+by no ;
+run ;
+
+data list;
+infile "~/list.csv" dsd missover firstobs=2;                                                                                                                                                          
+informat SerialNo 8.;                                                                                                                                                 
+input   SerialNo :8.;                                                                                                                                                    
+run; 
+
+proc import datafile="~/list.csv"
+out=list
+dbms=csv
+replace;
+run;
+
+/** 会員一連番号に会員番号を追加する事例 **/
+data list;													
+infile "~/list_input.csv" delimiter = ',' missover dsd firstobs=2;
+input serialno :$32.;
+run;
+
+data list(rename=(sn=serialno));
+set list;
+serialno=strip(substr(serialno,1,length(serialno)-1));
+sn=input(serialno,8.);
+drop serialno;
+run;
+
+
+proc sort data=list; by serialno; run;
+
+proc sort data=risklib.convert out=convert; by serialno; run;
+
+data list;													
+	merge list(in=x) convert(in=y);							
+by serialno;
+if x;
+run;
+
+data list;												
+	set list;										
+if no = . then no = serialno;
+run;
+
+
+proc export data = work.list file = '~/list_output.csv' replace;
+run;
+
+
+proc freq data=gz_sol;
+	tables gz_wakai / nocol norow nopercent;
+	*where irrl_flag='-' and SOL_Flag='not_SOL';
+run;
+
+data=gz_sol;
+set gz_sol(where=(irrl_flag='-' and SOL_Flag='not_SOL'));
+Wakaibi=substr(wakai_date,1,6);
+run;
+
+data aa;
+x=1;date=20050227;output;
+x=2;date=20110215;output;
+x=3;date=20140109;output;
+*format date YYMMDD8.;
+run;
+
+data aa;
+set aa;
+Ndate=put(date,8.);
+sdate=mdy(substr(ndate,5,2),substr(ndate,7,2),substr(ndate,1,4));
+format sdate YYMMn6.;
+run;
+
+/*************************/
+
+proc import datafile="/share/sfrisk/legal/5_kabarai/rawdata/Kabarai_Payout_Details9.csv"
+out=Kabarai_Payout_Details9
+dbms=csv
+replace;
+run;
+
+/******/
+filename rawdata '/share/sfrisk/legal/5_kabarai/rawdata';
+
+proc sort data=risklib.convert out=convert; by no; run;
+
+%let q=1;
+
+%macro kabarai;
+%do i=&q %to 9;
+
+data Kabarai_Payout_Details&i;
+infile rawdata(Kabarai_Payout_Details&i..csv) firstobs=2 dsd dlm=',' missover;
+input Account_Date :yymmdd10. Payout_date :yymmdd10. No :best12. Payout_Amount :Best12.;
+format Account_Date yymmdd10. Payout_date yymmdd10. No 10. Payout_Amount Best12.;
+if missing(No) then delete;
+run;
+
+proc sort data=Kabarai_Payout_Details&i; by no; run;
+
+data Kabarai_Payout_Details&i;													
+	merge Kabarai_Payout_Details&i(in=t1) convert(in=t2);							
+by no;
+if t1;
+if serialno = . then serialno = no;
+File=&i;
+run;
+
+%end;
+
+data kabarai_payout_details;
+set
+	%do i =&q %to 9;
+	Kabarai_Payout_Details&i
+	%end ;
+	;
+run ;
+
+proc sort data=kabarai_payout_details;by serialno;run;
+
+proc sql;/*serialno重複の場合、最初和解日で集計*/
+create table kabarai_payout_details as
+select 	min(Account_Date) as Account_Date format=yymmdd10., 
+		min(Payout_Date) as Payout_Date format=yymmdd10.,
+		mean(No) as No,	
+		sum(Payout_Amount) as Payout_Amount,
+		mean(serialno) as SerialNo,
+		min(File) as File
+from kabarai_payout_details
+group by Serialno;
+quit;
+
+%mend kabarai;
+
+%kabarai
+/******/
+
+proc sql;
+create table kk as
+select 	min(Account_Date) as Account_Date format=yymmdd10., min(Payout_Date) as Payout_Date format=yymmdd10.,
+		mean(No) as No,	sum(Payount_Amount) as Payout_Amount,mean(serialno) as SerialNo,min(File) as File
+from testo
+group by Serialno;
+quit;
+
+/*EDA*/
+proc sql;
+create table dict as
+select memname,nobs,nvar,crdate
+from dictionary.tables
+where libname='WORK' and substr(memname,1,7)='KABARAI';
+quit;
+
+
+proc compare base=aa compare=Kabarai_Payout_Details9;run;
+
+proc sql;
+create table test as
+select count(serialno) as count,count(distinct serialno) as distinct
+from kabarai_payout_details;quit;
+
+
+data testo;
+set kabarai_payout_details;
+by serialno;
+if first.serialno then First=1;else First=0;
+if last.serialno then Last=1;else Last=1;
+run;
+
+
+
+data ac;
+set work.gz_sol;
+
+proc freq data=work.gz_sol;
+tables gz_wakai / norow nocol nopercent nocum;
+where irrl_flag='-' and SOL_Flag='not_SOL' and wakai_date=0 and Kabarai<0;
+run;
+
+
+/********/
+data ad;
+merge gz_sol2(in=t1) kabarai_payout_details(in=t2 keep=serialno account_Date);
+by serialno;
+if t1;
+if irrl_flag='-' and SOL_Flag='not_SOL' and wakai_date=0 and Kabarai<0 and gz_wakai = 'Yes' then do;
+Wakaibi=Account_Date;
+Marker=1;end;
+run;
+
+data ae;
+set ad;
+where marker=1;
+run;
+
+
+proc sql;
+	create table work.SUMFLIP as
+	select
+		Wakaibi,
+		book,
+		flip,
+		gz_wakai,
+		SOL_flag,
+		irrl_flag,
+		count(*) as count,
+		sum(irrl_balance)/1000000 as IRRL_MM,
+		sum(Kabarai)/1000000 as Kabarai_MM,
+		calculated Kabarai_MM/calculated IRRL_MM as Disc_Rate		
+	from
+		work.ad
+	group by
+		Wakaibi,
+		book,
+		flip,
+		gz_wakai,
+		SOL_flag,
+		irrl_flag
+	;
+quit;
+
+
+proc export data = work.SUMFLIP file = '~/SUMFLIP.csv' replace;
+run;
+
+/*flip v1*/
+options nomprint;
+libname master	'/share/world/master';
+libname dwh	'/share/houmu/sato/DWH_Daily';
+
+
+/* *** DWH 接続 *** */
+%include "/odd/lib/sf-dwh.key";
+
+
+
+
+/* *** 対象顧客特定 *** */
+data work.cust;
+	set risklib.cust9908(keep = serialno c9908042 c9908047 c9908145 c9908143
+			      rename = (c9908042 = first_loan_date
+					c9908047 = balance
+					c9908145 = wo_date
+					c9908143 = paid_off_date));
+	where	first_loan_date <= '1Nov1998'd;
+
+	length book $8.;
+	if wo_date <= '1nov1998'd then			book = 'W/O';
+	else if paid_off_date <= '1Nov1998'd then	book = 'Paid_Off';
+	else						book = 'On Book';
+run;
+
+
+
+/* *** 口座情報 *** */
+data work.cust_ac;
+	merge	work.cust(in = a)
+		risklib.acco0011(in = b
+				 keep = serialno acc_r_no ac001115 ac001107
+				 rename = (ac001115 = wakai /*和解区分*/
+					   ac001107 = cont_date)); /*包括契約日*/
+	by	serialno;
+	if a = 1 and b = 1;
+
+	length flip $3.;
+	if	'2Nov1998'd <= cont_date <= '2Nov2000'd then	flip = 'Yes';
+	else							flip = 'No';
+run;
+
+proc sort data = work.cust_ac;
+	by	serialno flip;	/* No → Yes */
+run;
+
+data work.cust_ac;
+	set work.cust_ac;
+	by	serialno;
+
+	if last.serialno then
+		output;
+run;
+
+
+/* 件数確認
+proc freq;
+	tables book * flip / nocol norow nopercent;
+run;
+
+
+                                    book      flip
+
+                                    度数     |No      |Yes     |   合計
+                                    ---------+--------+--------+
+                                    On Book  | 319218 |1174331 |1493549
+                                    ---------+--------+--------+
+                                    Paid_Off |1512131 |  61779 |1573910
+                                    ---------+--------+--------+
+                                    W/O      | 281365 |  15468 | 296833
+                                    ---------+--------+--------+
+                                    合計      2112714  1251578  3364292
+
+*/
+
+
+
+
+
+
+/* *** IRRL *** */
+data work.irrl;
+	merge	work.cust_ac(in = a)
+		master.irrl_balance1501;
+	by	serialno;
+	if a;
+	
+length	irrl_flag	$2;
+if	irrl_balance<0	and irrl_balance ne .	then	irrl_flag='-' 	;
+else if	irrl_balance=0	and irrl_balance ne .	then	irrl_flag='0' 	;
+else if	irrl_balance>0	and irrl_balance ne .	then	irrl_flag='+' 	;
+else							irrl_flag='NA'	;	
+run;
+
+
+
+
+/* *** GZ 和解 *** */
+ /*LIVE DATASET*//*
+ data work.kaijiDB(rename=(_COL0=serialno _COL19=wakai_date _COL18=Kabarai)); 
+ set oralib.VEW_JKJSJREC_N001(keep=_COL0 _COL19 _COL18);/*開示進捗DB*/
+ run;
+ proc sort data=kaijiDB; by serialno;run;*/
+
+/*LOCAL SAVE*/
+ data work.kaijiDB(rename=(_COL19=wakai_date _COL18=Kabarai)); 
+ set dwh.kaiji20150305(keep=serialno _COL19 _COL18);
+ run;
+ 
+proc datasets lib=work;
+modify kaijiDB; 
+attrib _all_ label='';run;
+
+data work.gz;
+	merge	work.irrl(in = a)
+		work.kaijiDB;
+	by	serialno;
+	if a;
+
+	length gz_wakai $3.;
+	if wakai_date not in (0, .) then	gz_wakai = 'Yes';
+	else					gz_wakai = 'No';
+run;
+
+
+/* *** 時効 *** */
+proc sort data=master.acco_master1502(keep=serialno ac65 rename=(ac65=Saisyu_Trx)) /*CHANGE*/
+		   out=work.acco_master; 
+		   by serialno descending Saisyu_Trx;
+run;
+
+data work.acco_master;
+set work.acco_master;
+by serialno;
+if first.serialno;run;
+
+
+data work.gz_sol1;
+	merge	work.gz(in = a)
+		work.acco_master;
+	by	serialno;
+	if a;
+
+length SOL_Flag $7.;
+if intnx('year',Saisyu_Trx,10,'same')+1>'28feb2015'd then SOL_Flag='not_SOL'; /*CHANGE*/
+else SOL_Flag='SOL';
+
+if gz_wakai = 'No' and irrl_flag='-' and SOL_Flag='not_SOL' and wakai_date=0 and Kabarai<0 then gz_wakai = 'Yes';
+run;
+
+
+/* *** 集計1 *** */
+proc sql;
+	create table work.Flip_Summary1 as
+	select
+		book,
+		flip,
+		gz_wakai,
+		SOL_flag,
+		irrl_flag,
+		count(*) as count,
+		sum(irrl_balance)/1000000 as IRRL_MM,
+		sum(Kabarai)/1000000 as Kabarai_MM,
+		calculated Kabarai_MM/calculated IRRL_MM as Disc_Rate		
+	from
+		work.gz_sol1
+	group by
+		book,
+		flip,
+		gz_wakai,
+		SOL_flag,
+		irrl_flag
+	;
+quit;
+
+proc export data = work.Flip_Summary1 file = '~/Flip_Summary1.csv' replace;
+run;
+
+/* *** 集計2 *** */
+data gz_sol2 (drop=Temp_date);
+set gz_sol1/*(where=(irrl_flag='-' and SOL_Flag='not_SOL'))*/;
+Temp_date=put(wakai_date,8.);
+Wakaibi=mdy(substr(Temp_date,5,2),substr(Temp_date,7,2),substr(Temp_date,1,4));
+format Wakaibi YYMMn6.;
+run;
+
+/** 和解日なし・過払ありの件数にPayout_Dateを代表に採用 **/
+filename rawdata '/share/sfrisk/legal/5_kabarai/rawdata';
+
+proc sort data=risklib.convert out=convert; by no; run;
+
+%let q=1;
+
+%macro kabarai;
+%do i=&q %to 9;
+
+data Kabarai_Payout_Details&i;
+infile rawdata(Kabarai_Payout_Details&i..csv) firstobs=2 dsd dlm=',' missover;
+input Account_Date :yymmdd10. Payout_date :yymmdd10. No :best12. Payout_Amount :Best12.;
+format Account_Date yymmdd10. Payout_date yymmdd10. No 10. Payout_Amount Best12.;
+if missing(No) then delete;
+File=&i;
+run;
+
+proc sort data=Kabarai_Payout_Details&i; by no; run;
+
+data Kabarai_Payout_Details&i;													
+	merge Kabarai_Payout_Details&i(in=t1) convert(in=t2);							
+by no;
+if t1;
+if serialno = . then serialno = no;
+run;
+
+%end;
+
+data kabarai_payout_details;
+set
+	%do i =&q %to 9;
+	Kabarai_Payout_Details&i
+	%end ;
+	;
+run ;
+
+proc sort data=kabarai_payout_details;by serialno;run;
+
+proc sql;/*serialno重複の場合、最初和解日で集計*/
+create table kabarai_payout_details as
+select 	min(Account_Date) as Account_Date format=yymmdd10., 
+		min(Payout_Date) as Payout_Date format=yymmdd10.,
+		mean(No) as No,	
+		sum(Payout_Amount) as Payout_Amount,
+		mean(serialno) as SerialNo,
+		min(File) as File
+from kabarai_payout_details
+group by Serialno;
+quit;
+
+%mend kabarai;
+
+%kabarai
+
+
+data gz_sol3;
+merge gz_sol2(in=t1) kabarai_payout_details(in=t2 keep=serialno account_Date);
+by serialno;
+if t1;
+if irrl_flag='-' and SOL_Flag='not_SOL' and wakai_date=0 and Kabarai<0 and gz_wakai = 'Yes' then do;
+Wakaibi=Account_Date;
+Marker=1;end;
+if missing(Marker) then Marker=0;
+run;
+
+
+proc sql;
+	create table work.Flip_Summary2 as
+	select
+		Wakaibi,
+		book,
+		flip,
+		gz_wakai,
+		SOL_flag,
+		Marker,
+		irrl_flag,
+		count(*) as count,
+		sum(irrl_balance)/1000000 as IRRL_MM,
+		sum(Kabarai)/1000000 as Kabarai_MM,
+		calculated Kabarai_MM/calculated IRRL_MM as Disc_Rate		
+	from
+		work.gz_sol3
+	group by
+		Wakaibi,
+		book,
+		flip,
+		gz_wakai,
+		SOL_flag,
+		Marker,
+		irrl_flag
+	;
+quit;
+
+
+proc export data = work.Flip_Summary2 file = '~/Flip_Summary2.csv' replace;
+run;
+
+/* *** 集計2 END*** */
+
