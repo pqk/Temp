@@ -1,0 +1,52 @@
+data t1;
+x=1;y='A';output;
+x=2;y='B';output;
+x=3;y='C';output;
+run;
+
+data t2;
+x=2;y='B';z='123';output;
+x=3;y='C';z='456';output;
+x=4;y='D';z='789';output;
+run;
+
+data onlyt1;
+merge t1(in=t1) t2(in=t2);
+by x;
+if t1 and not t2;
+run;
+
+data onlyt2;
+merge t1(in=t1) t2(in=t2);
+by x;
+if t2 and not t1;
+run;
+
+
+data both;
+merge t1(in=t1) t2(in=t2);
+by x;
+if t1 and t2;
+run;
+
+
+/*IDENTICAL*/
+data just_t1;
+merge t1(in=t1) t2(in=t2);
+by x;
+if t1;
+run;
+
+proc sql;
+create table both_sql as
+select coalesce(t1.x,t2.x) as x,*
+from t1 as t1 left join t2 as t2 on t1.x=t2.x;
+quit;
+
+
+/*but below seems to also be identical...don't need COALESCE?*/
+proc sql;
+create table both_sql as
+select *
+from t1 as t1 left join t2 as t2 on t1.x=t2.x;
+quit;
