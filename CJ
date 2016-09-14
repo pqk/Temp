@@ -1,0 +1,1235 @@
+/*manki*/
+filename manki "\\ssosn1527\sas$\個人部門\リテール営業統轄部\input\raw\満期リスト";
+
+/*test*/
+/*** Initial Date ***/
+%let ST='1Apr2013'd; 	/*--> s_cut=1*/
+       
+data _null_;		/*n= months elapsed from s_cut=1 to today() nはs_cut=1～本日の間の経過月数*/
+        call symput ("n",strip(intck("month",&ST-1,intnx('day',intnx('month',today(),+2/*0*/),-1)))) ; /* 0 > +2 in order to generate current and next month too */
+run;
+
+%put %nrstr(&n =) &n;/* Check */
+
+data _null_;	/*creates monthly macvar series from &ST to today()*/
+	%macro YM1;
+		%do i= 0 %to &n ;
+			call symput("yymm&i" ,put(intnx("month",&ST-1,%eval(&i),"end"),yymmdd4.));
+		%end;
+	%mend YM1;
+	%YM1 ;
+run;
+
+%macro YM2 ; /*output to log all yymm&i macvar*/
+	%do i= 0 %to &n ;
+		%put yymm&i = &&yymm&i;
+	%end ;
+%mend YM2;
+%YM2 ;
+
+
+/***********CREATE SAS DATASETS *************/
+
+/* 201304 */
+data work.mankilist_201304;
+infile manki(満期リスト_201304.csv)	delimiter = ',' missover dsd lrecl=10000 firstobs=2;
+input 	
+Haifu_buten	:$30.
+予備	:$2.
+GCIF	:$10.
+staffid	:$10.
+R_SFC	:$10.
+Last_Con_Staff	:$10.
+Last_Con_Day	:YYMMDD10.
+Last_Act_Staff	:$10.
+Last_Act_Day	:YYMMDD10.
+Last_Jit_Staff	:$10.
+状況▼	:$6.
+コメント欄	:$1.
+満期DM送付先	:$12.
+COD_PROD	:BEST32.
+MANKI_SHN_2	:$20.
+SHNNM	:$100.
+COD_TENOR	:$4.
+AMT_PRIN_TCY	:BEST32.
+COD_TXN_CCY	:$5.
+AMT_EOM_LCY	:BEST32.
+DAT_INITL_DEP	:YYMMDD10.
+DAT_MATURITY	:YYMMDD10.
+CONTRACTED_INT_RAT	:BEST32.
+aitai_ccy	:$5.
+strike	:BEST32.
+strike1	:BEST32.
+strike2	:BEST32.
+shueki	:BEST32.
+sex	:$6.
+age	:BEST32.
+syokugyo	:$40.
+postcode	:$10.
+address	:$100.
+AUM	:BEST32.
+リスクAUM	:BEST32.;
+
+format
+Haifu_buten	$30.
+予備	$2.
+GCIF	$10.
+staffid	$10.
+R_SFC	$10.
+Last_Con_Staff	$10.
+Last_Con_Day	YYMMDD10.
+Last_Act_Staff	$10.
+Last_Act_Day	YYMMDD10.
+Last_Jit_Staff	$10.
+状況▼	$6.
+コメント欄	$1.
+満期DM送付先	$12.
+COD_PROD	BEST32.
+MANKI_SHN_2	$20.
+SHNNM	$100.
+COD_TENOR	$4.
+AMT_PRIN_TCY	BEST32.
+COD_TXN_CCY	$5.
+AMT_EOM_LCY	BEST32.
+DAT_INITL_DEP	YYMMDD10.
+DAT_MATURITY	YYMMDD10.
+CONTRACTED_INT_RAT	BEST32.
+aitai_ccy	$5.
+strike	BEST32.
+strike1	BEST32.
+strike2	BEST32.
+shueki	BEST32.
+sex	$6.
+age	BEST32.
+syokugyo	$40.
+postcode	$10.
+address	$100.
+AUM	BEST32.
+リスクAUM	BEST32.;
+run;
+
+
+/* 201305-201306 */
+%let s_cut =2 ;  	/*yymm2 = 1305 */
+%let e_cut =3 ;	/*yymm3 = 1306*/
+
+%macro manki0;
+%do i=&s_cut %to &e_cut;
+
+data work.mankilist_20&&yymm&i;
+infile manki(満期リスト_20&&yymm&i...csv)	delimiter = ',' missover dsd lrecl=10000 firstobs=2;
+input 	
+Haifu_buten	:$30.
+予備	:$2.
+GCIF	:$10.
+staffid	:$10.
+R_SFC	:$10.
+Last_Con_Staff	:$10.
+Last_Con_Day	:YYMMDD10.
+Last_Act_Staff	:$10.
+Last_Act_Day	:YYMMDD10.
+Last_Jit_Staff	:$10.
+E区分	:$14.
+状況▼	:$6.
+コメント欄	:$1.
+満期DM送付先	:$12.
+COD_PROD	:BEST32.
+MANKI_SHN_2	:$20.
+SHNNM	:$100.
+COD_TENOR	:$4.
+AMT_PRIN_TCY	:BEST32.
+COD_TXN_CCY	:$5.
+AMT_EOM_LCY	:BEST32.
+DAT_INITL_DEP	:YYMMDD10.
+DAT_MATURITY	:YYMMDD10.
+CONTRACTED_INT_RAT	:BEST32.
+aitai_ccy	:$5.
+strike	:BEST32.
+strike1	:BEST32.
+strike2	:BEST32.
+shueki	:BEST32.
+sex	:$6.
+age	:BEST32.
+syokugyo	:$40.
+postcode	:$10.
+address	:$100.
+AUM	:BEST32.
+リスクAUM	:BEST32.;
+
+format
+Haifu_buten	$30.
+予備	$2.
+GCIF	$10.
+staffid	$10.
+R_SFC	$10.
+Last_Con_Staff	$10.
+Last_Con_Day	YYMMDD10.
+Last_Act_Staff	$10.
+Last_Act_Day	YYMMDD10.
+Last_Jit_Staff	$10.
+E区分	$14.
+状況▼	$6.
+コメント欄	$1.
+満期DM送付先	$12.
+COD_PROD	BEST32.
+MANKI_SHN_2	$20.
+SHNNM	$100.
+COD_TENOR	$4.
+AMT_PRIN_TCY	BEST32.
+COD_TXN_CCY	$5.
+AMT_EOM_LCY	BEST32.
+DAT_INITL_DEP	YYMMDD10.
+DAT_MATURITY	YYMMDD10.
+CONTRACTED_INT_RAT	BEST32.
+aitai_ccy	$5.
+strike	BEST32.
+strike1	BEST32.
+strike2	BEST32.
+shueki	BEST32.
+sex	$6.
+age	BEST32.
+syokugyo	$40.
+postcode	$10.
+address	$100.
+AUM	BEST32.
+リスクAUM	BEST32.;
+run;
+
+%end;
+
+%mend manki0;
+
+%manki0
+
+/* 201307 */
+data work.mankilist_201307;
+infile manki(満期リスト_201307.csv)	delimiter = ',' missover dsd lrecl=10000 firstobs=2;
+input 	
+Haifu_buten	:$30.
+予備	:$2.
+GCIF	:$10.
+staffid	:$10.
+R_SFC	:$10.
+Last_Con_Staff	:$10.
+Last_Con_Day	:YYMMDD10.
+Last_Act_Staff	:$10.
+Last_Act_Day	:YYMMDD10.
+Last_Jit_Staff	:$10.
+E区分	:$14.
+状況▼	:$6.
+コメント欄	:$1.
+COD_PROD	:BEST32.
+MANKI_SHN_2	:$20.
+SHNNM	:$100.
+COD_TENOR	:$4.
+AMT_PRIN_TCY	:BEST32.
+COD_TXN_CCY	:$5.
+AMT_EOM_LCY	:BEST32.
+DAT_INITL_DEP	:YYMMDD10.
+DAT_MATURITY	:YYMMDD10.
+CONTRACTED_INT_RAT	:BEST32.
+aitai_ccy	:$5.
+strike	:BEST32.
+strike1	:BEST32.
+strike2	:BEST32.
+shueki	:BEST32.
+sex	:$6.
+age	:BEST32.
+syokugyo	:$40.
+postcode	:$10.
+address	:$100.
+AUM	:BEST32.
+リスクAUM	:BEST32.;
+
+format
+Haifu_buten	$30.
+予備	$2.
+GCIF	$10.
+staffid	$10.
+R_SFC	$10.
+Last_Con_Staff	$10.
+Last_Con_Day	YYMMDD10.
+Last_Act_Staff	$10.
+Last_Act_Day	YYMMDD10.
+Last_Jit_Staff	$10.
+E区分	$14.
+状況▼	$6.
+コメント欄	$1.
+COD_PROD	BEST32.
+MANKI_SHN_2	$20.
+SHNNM	$100.
+COD_TENOR	$4.
+AMT_PRIN_TCY	BEST32.
+COD_TXN_CCY	$5.
+AMT_EOM_LCY	BEST32.
+DAT_INITL_DEP	YYMMDD10.
+DAT_MATURITY	YYMMDD10.
+CONTRACTED_INT_RAT	BEST32.
+aitai_ccy	$5.
+strike	BEST32.
+strike1	BEST32.
+strike2	BEST32.
+shueki	BEST32.
+sex	$6.
+age	BEST32.
+syokugyo	$40.
+postcode	$10.
+address	$100.
+AUM	BEST32.
+リスクAUM	BEST32.;
+run;
+
+/* 201308 */
+data work.mankilist_201308;
+infile manki(満期リスト_201308.csv)	delimiter = ',' missover dsd lrecl=10000 firstobs=2;
+input
+Shukan_buten :$30.
+ACCNO :$15.
+Haifu_buten :$30.
+予備	:$2.
+GCIF	:$10.
+staffid	:$10.
+R_SFC	:$10.
+Last_Con_Staff	:$10.
+Last_Con_Day	:YYMMDD10.
+Last_Act_Staff	:$10.
+Last_Act_Day	:YYMMDD10.
+Last_Jit_Staff	:$10.
+E区分	:$14.
+状況▼	:$6.
+コメント欄	:$1.
+満期DM送付先	:$12.
+COD_PROD	:BEST32.
+MANKI_SHN_2	:$20.
+SHNNM	:$100.
+COD_TENOR	:$4.
+AMT_PRIN_TCY	:BEST32.
+COD_TXN_CCY	:$5.
+AMT_EOM_LCY	:BEST32.
+DAT_INITL_DEP	:YYMMDD10.
+DAT_MATURITY	:YYMMDD10.
+CONTRACTED_INT_RAT	:BEST32.
+aitai_ccy	:$5.
+strike	:BEST32.
+strike1	:BEST32.
+strike2	:BEST32.
+shueki	:BEST32.
+sex	:$6.
+age	:BEST32.
+syokugyo	:$40.
+postcode	:$10.
+address	:$100.
+AUM	:BEST32.
+リスクAUM	:BEST32.;
+
+format
+Shukan_buten $30.
+ACCNO $15.
+Haifu_buten	$30.
+予備	$2.
+GCIF	$10.
+staffid	$10.
+R_SFC	$10.
+Last_Con_Staff	$10.
+Last_Con_Day	YYMMDD10.
+Last_Act_Staff	$10.
+Last_Act_Day	YYMMDD10.
+Last_Jit_Staff	$10.
+E区分	$14.
+状況▼	$6.
+コメント欄	$1.
+満期DM送付先	$12.
+COD_PROD	BEST32.
+MANKI_SHN_2	$20.
+SHNNM	$100.
+COD_TENOR	$4.
+AMT_PRIN_TCY	BEST32.
+COD_TXN_CCY	$5.
+AMT_EOM_LCY	BEST32.
+DAT_INITL_DEP	YYMMDD10.
+DAT_MATURITY	YYMMDD10.
+CONTRACTED_INT_RAT	BEST32.
+aitai_ccy	$5.
+strike	BEST32.
+strike1	BEST32.
+strike2	BEST32.
+shueki	BEST32.
+sex	$6.
+age	BEST32.
+syokugyo	$40.
+postcode	$10.
+address	$100.
+AUM	BEST32.
+リスクAUM	BEST32.;
+run;
+
+/* 201309-201403 */
+%let s_cut =6 ;  	/*yymm6 = 1309 */
+%let e_cut =12 ;	/*yymm12 = 1403*/
+
+%macro manki1;
+%do i=&s_cut %to &e_cut;
+
+data work.mankilist_20&&yymm&i;
+infile manki(満期リスト_20&&yymm&i...csv)	delimiter = ',' missover dsd lrecl=10000 firstobs=2;
+input
+Haifu_buten :$30.
+予備	:$2.
+GCIF	:$10.
+staffid	:$10.
+R_SFC	:$10.
+Last_Con_Staff	:$10.
+Last_Con_Day	:YYMMDD10.
+Last_Act_Staff	:$10.
+Last_Act_Day	:YYMMDD10.
+Last_Jit_Staff	:$10.
+E区分	:$14.
+状況▼	:$6.
+コメント欄	:$1.
+満期DM送付先	:$12.
+COD_PROD	:BEST32.
+MANKI_SHN_2	:$20.
+SHNNM	:$100.
+COD_TENOR	:$4.
+AMT_PRIN_TCY	:BEST32.
+COD_TXN_CCY	:$5.
+AMT_EOM_LCY	:BEST32.
+DAT_INITL_DEP	:YYMMDD10.
+DAT_MATURITY	:YYMMDD10.
+CONTRACTED_INT_RAT	:BEST32.
+aitai_ccy	:$5.
+strike	:BEST32.
+strike1	:BEST32.
+strike2	:BEST32.
+shueki	:BEST32.
+sex	:$6.
+age	:BEST32.
+syokugyo	:$40.
+postcode	:$10.
+address	:$100.
+AUM	:BEST32.
+リスクAUM	:BEST32.;
+
+format
+Haifu_buten	$30.
+予備	$2.
+GCIF	$10.
+staffid	$10.
+R_SFC	$10.
+Last_Con_Staff	$10.
+Last_Con_Day	YYMMDD10.
+Last_Act_Staff	$10.
+Last_Act_Day	YYMMDD10.
+Last_Jit_Staff	$10.
+E区分	$14.
+状況▼	$6.
+コメント欄	$1.
+満期DM送付先	$12.
+COD_PROD	BEST32.
+MANKI_SHN_2	$20.
+SHNNM	$100.
+COD_TENOR	$4.
+AMT_PRIN_TCY	BEST32.
+COD_TXN_CCY	$5.
+AMT_EOM_LCY	BEST32.
+DAT_INITL_DEP	YYMMDD10.
+DAT_MATURITY	YYMMDD10.
+CONTRACTED_INT_RAT	BEST32.
+aitai_ccy	$5.
+strike	BEST32.
+strike1	BEST32.
+strike2	BEST32.
+shueki	BEST32.
+sex	$6.
+age	BEST32.
+syokugyo	$40.
+postcode	$10.
+address	$100.
+AUM	BEST32.
+リスクAUM	BEST32.;
+run;
+
+%end;
+
+%mend manki1;
+
+%manki1
+
+
+/* 201404-201409 */
+%let s_cut =13 ;  	/*yymm13 = 1404 */
+%let e_cut =18 ;	/*yymm18 = 1409*/
+
+%macro manki2;
+%do i=&s_cut %to &e_cut;
+
+data work.mankilist_20&&yymm&i;
+infile manki(満期リスト_20&&yymm&i...csv)	delimiter = ',' missover dsd lrecl=10000 firstobs=2;
+input
+DAT_FINAL_MATURITY	:YYMMDD10.
+IDNumber :BEST32.
+Haifu_buten :$30.
+予備	:$2.
+GCIF	:$10.
+staffid	:$10.
+R_SFC	:$10.
+Last_Con_Staff	:$10.
+Last_Con_Day	:YYMMDD10.
+Last_Act_Staff	:$10.
+Last_Act_Day	:YYMMDD10.
+Last_Jit_Staff	:$10.
+E区分	:$14.
+状況▼	:$6.
+コメント欄	:$1.
+満期DM送付先	:$12.
+COD_PROD	:BEST32.
+MANKI_SHN_2	:$20.
+SHNNM	:$100.
+COD_TENOR	:$4.
+AMT_PRIN_TCY	:BEST32.
+COD_TXN_CCY	:$5.
+AMT_EOM_LCY	:BEST32.
+DAT_INITL_DEP	:YYMMDD10.
+DAT_MATURITY	:YYMMDD10.
+CONTRACTED_INT_RAT	:BEST32.
+aitai_ccy	:$5.
+strike	:BEST32.
+strike1	:BEST32.
+strike2	:BEST32.
+shueki	:BEST32.
+sex	:$6.
+age	:BEST32.
+syokugyo	:$40.
+postcode	:$10.
+address	:$100.
+AUM	:BEST32.
+リスクAUM	:BEST32.;
+
+format
+DAT_FINAL_MATURITY	YYMMDD10.
+IDNumber BEST32.
+Haifu_buten	$30.
+予備	$2.
+GCIF	$10.
+staffid	$10.
+R_SFC	$10.
+Last_Con_Staff	$10.
+Last_Con_Day	YYMMDD10.
+Last_Act_Staff	$10.
+Last_Act_Day	YYMMDD10.
+Last_Jit_Staff	$10.
+E区分	$14.
+状況▼	$6.
+コメント欄	$1.
+満期DM送付先	$12.
+COD_PROD	BEST32.
+MANKI_SHN_2	$20.
+SHNNM	$100.
+COD_TENOR	$4.
+AMT_PRIN_TCY	BEST32.
+COD_TXN_CCY	$5.
+AMT_EOM_LCY	BEST32.
+DAT_INITL_DEP	YYMMDD10.
+DAT_MATURITY	YYMMDD10.
+CONTRACTED_INT_RAT	BEST32.
+aitai_ccy	$5.
+strike	BEST32.
+strike1	BEST32.
+strike2	BEST32.
+shueki	BEST32.
+sex	$6.
+age	BEST32.
+syokugyo	$40.
+postcode	$10.
+address	$100.
+AUM	BEST32.
+リスクAUM	BEST32.;
+run;
+
+%end;
+
+%mend manki2;
+
+%manki2
+
+/* 201410-201507 */
+%let s_cut =19 ;  	/*yymm19 = 1410 */
+%let e_cut =28 ;	/*yymm28 = 1507*/
+
+%macro manki3;
+%do i=&s_cut %to &e_cut;
+
+data work.mankilist_20&&yymm&i;
+infile manki(満期リスト_20&&yymm&i...csv)	delimiter = ',' missover dsd lrecl=10000 firstobs=2;
+input
+Haifu_buten	:$30.
+予備	:$2.
+GCIF	:$10.
+staffid	:$10.
+R_SFC	:$10.
+Last_Con_Staff	:$10.
+Last_Con_Day	:YYMMDD10.
+Last_Act_Staff	:$10.
+Last_Act_Day	:YYMMDD10.
+Last_Jit_Staff	:$10.
+E区分	:$14.
+状況▼	:$6.
+コメント欄	:$1.
+満期DM送付先	:$12.
+COD_PROD	:BEST32.
+MANKI_SHN_2	:$20.
+SHNNM	:$100.
+COD_TENOR	:$4.
+AMT_PRIN_TCY	:BEST32.
+COD_TXN_CCY	:$5.
+AMT_EOM_LCY	:BEST32.
+DAT_INITL_DEP	:YYMMDD10.
+DAT_MATURITY	:YYMMDD10.
+CONTRACTED_INT_RAT	:BEST32.
+aitai_ccy	:$5.
+strike	:BEST32.
+strike1	:BEST32.
+strike2	:BEST32.
+shueki	:BEST32.
+sex	:$6.
+age	:BEST32.
+syokugyo	:$40.
+postcode	:$10.
+address	:$100.
+AUM	:BEST32.
+リスクAUM	:BEST32.
+_満期月	:BEST12.
+_設定者ID	:$15.;
+
+format
+Haifu_buten	$30.
+予備	$2.
+GCIF	$10.
+staffid	$10.
+R_SFC	$10.
+Last_Con_Staff	$10.
+Last_Con_Day	YYMMDD10.
+Last_Act_Staff	$10.
+Last_Act_Day	YYMMDD10.
+Last_Jit_Staff	$10.
+E区分	$14.
+状況▼	$6.
+コメント欄	$1.
+満期DM送付先	$12.
+COD_PROD	BEST32.
+MANKI_SHN_2	$20.
+SHNNM	$100.
+COD_TENOR	$4.
+AMT_PRIN_TCY	BEST32.
+COD_TXN_CCY	$5.
+AMT_EOM_LCY	BEST32.
+DAT_INITL_DEP	YYMMDD10.
+DAT_MATURITY	YYMMDD10.
+CONTRACTED_INT_RAT	BEST32.
+aitai_ccy	$5.
+strike	BEST32.
+strike1	BEST32.
+strike2	BEST32.
+shueki	BEST32.
+sex	$6.
+age	BEST32.
+syokugyo	$40.
+postcode	$10.
+address	$100.
+AUM	BEST32.
+リスクAUM	BEST32.
+_満期月	BEST12.
+_設定者ID	$15.;
+run;
+
+%end;
+
+%mend manki3;
+
+%manki3
+
+
+/* 201508-201510 */
+%let s_cut =29 ;  	/*yymm29 = 1508 */
+%let e_cut =31 ;	/*yymm31 = 1510*/
+
+%macro manki4;
+%do i=&s_cut %to &e_cut;
+
+data work.mankilist_20&&yymm&i;
+infile manki(満期リスト_20&&yymm&i...csv)	delimiter = ',' missover dsd lrecl=10000 firstobs=2;
+input
+Haifu_buten	:$30.
+予備	:$2.
+GCIF	:$10.
+staffid	:$10.
+R_SFC	:$10.
+R区分	:$25.
+前月満期リストアサイン担当者	:$10.
+ポテリスト掲載客	:BEST12.
+ポテリストアサイン担当者	:$10.
+Last_Con_Staff	:$10.
+Last_Con_Day	:YYMMDD10.
+Last_Act_Staff	:$10.
+Last_Act_Day	:YYMMDD10.
+Last_Jit_Staff	:$10.
+設定部店／チャネル	:$12.
+E区分	:$14.
+状況▼	:$6.
+コメント欄	:$1.
+満期DM送付先	:$12.
+COD_PROD	:BEST32.
+MANKI_SHN_2	:$20.
+SHNNM	:$100.
+COD_TENOR	:$4.
+AMT_PRIN_TCY	:BEST32.
+COD_TXN_CCY	:$5.
+AMT_EOM_LCY	:BEST32.
+DAT_INITL_DEP	:YYMMDD10.
+DAT_MATURITY	:YYMMDD10.
+CONTRACTED_INT_RAT	:BEST32.
+strike	:BEST32.
+strike1	:BEST32.
+strike2	:BEST32.
+aitai_ccy	:$5.
+shueki	:BEST32.
+sex	:$6.
+age	:BEST32.
+syokugyo	:$40.
+postcode	:$10.
+address	:$100.
+AUM	:BEST32.
+リスクAUM	:BEST32.
+満期後の予定	:$6.
+預入可能期間	:$5.
+投資経験	:$6.
+連絡希望方法	:$6.
+平日来店可否	:$4.
+円定期希望度	:$5.
+その他	:$200.;
+
+format
+Haifu_buten	$30.
+予備	$2.
+GCIF	$10.
+staffid	$10.
+R_SFC	$10.
+R区分	$25.
+前月満期リストアサイン担当者	$10.
+ポテリスト掲載客	BEST12.
+ポテリストアサイン担当者	$10.
+Last_Con_Staff	$10.
+Last_Con_Day	YYMMDD10.
+Last_Act_Staff	$10.
+Last_Act_Day	YYMMDD10.
+Last_Jit_Staff	$10.
+設定部店／チャネル	$12.
+E区分	$14.
+状況▼	$6.
+コメント欄	$1.
+満期DM送付先	$12.
+COD_PROD	BEST32.
+MANKI_SHN_2	$20.
+SHNNM	$100.
+COD_TENOR	$4.
+AMT_PRIN_TCY	BEST32.
+COD_TXN_CCY	$5.
+AMT_EOM_LCY	BEST32.
+DAT_INITL_DEP	YYMMDD10.
+DAT_MATURITY	YYMMDD10.
+CONTRACTED_INT_RAT	BEST32.
+strike	BEST32.
+strike1	BEST32.
+strike2	BEST32.
+aitai_ccy	$5.
+shueki	BEST32.
+sex	$6.
+age	BEST32.
+syokugyo	$40.
+postcode	$10.
+address	$100.
+AUM	BEST32.
+リスクAUM	BEST32.
+満期後の予定	$6.
+預入可能期間	$5.
+投資経験	$6.
+連絡希望方法	$6.
+平日来店可否	$4.
+円定期希望度	$5.
+その他	$200.;
+run;
+
+%end;
+
+%mend manki4;
+
+%manki4
+
+/* 201511-201603,201605-201609  */
+%let s_cut =32 ;  	/*yymm32 = 1511 */
+%let e_cut =42 ;	/*yymm42 = 1609*/
+
+%macro manki5;
+%do i=&s_cut %to &e_cut;
+
+data work.mankilist_20&&yymm&i;
+infile manki(満期リスト_20&&yymm&i...csv)	delimiter = ',' missover dsd lrecl=10000 firstobs=2;
+input
+Haifu_buten	:$30.
+予備	:$2.
+GCIF	:$10.
+担当者ID_入力用	:$10.
+担当者ID_配布時点（確認用）	:$10.
+R_SFC	:$10.
+R区分	:$25.
+DBTフラグ	:BEST32.
+前月満期リストアサイン担当者	:$10.
+ポテリスト掲載客	:BEST12.
+ポテリストアサイン担当者	:$10.
+Last_Con_Staff	:$10.
+Last_Con_Day	:YYMMDD10.
+Last_Act_Staff	:$10.
+Last_Act_Day	:YYMMDD10.
+Last_Jit_Staff	:$10.
+設定部店／チャネル	:$12.
+E区分	:$14.
+状況▼	:$6.
+コメント欄	:$1.
+満期DM送付先	:$12.
+COD_PROD	:BEST32.
+MANKI_SHN_2	:$20.
+SHNNM	:$100.
+COD_TENOR	:$4.
+AMT_PRIN_TCY	:BEST32.
+COD_TXN_CCY	:$5.
+AMT_EOM_LCY	:BEST32.
+DAT_INITL_DEP	:YYMMDD10.
+DAT_MATURITY	:YYMMDD10.
+CONTRACTED_INT_RAT	:BEST32.
+aitai_ccy	:$5.
+strike	:BEST32.
+strike1	:BEST32.
+strike2	:BEST32.
+shueki	:BEST32.
+sex	:$6.
+age	:BEST32.
+syokugyo	:$40.
+postcode	:$10.
+address	:$100.
+AUM	:BEST32.
+リスクAUM	:BEST32.;
+
+format
+Haifu_buten	$30.
+予備	$2.
+GCIF	$10.
+担当者ID_入力用	$10.
+担当者ID_配布時点（確認用）	$10.
+R_SFC	$10.
+R区分	$25.
+DBTフラグ	BEST32.
+前月満期リストアサイン担当者	$10.
+ポテリスト掲載客	BEST12.
+ポテリストアサイン担当者	$10.
+Last_Con_Staff	$10.
+Last_Con_Day	YYMMDD10.
+Last_Act_Staff	$10.
+Last_Act_Day	YYMMDD10.
+Last_Jit_Staff	$10.
+設定部店／チャネル	$12.
+E区分	$14.
+状況▼	$6.
+コメント欄	$1.
+満期DM送付先	$12.
+COD_PROD	BEST32.
+MANKI_SHN_2	$20.
+SHNNM	$100.
+COD_TENOR	$4.
+AMT_PRIN_TCY	BEST32.
+COD_TXN_CCY	$5.
+AMT_EOM_LCY	BEST32.
+DAT_INITL_DEP	YYMMDD10.
+DAT_MATURITY	YYMMDD10.
+CONTRACTED_INT_RAT	BEST32.
+aitai_ccy	$5.
+strike	BEST32.
+strike1	BEST32.
+strike2	BEST32.
+shueki	BEST32.
+sex	$6.
+age	BEST32.
+syokugyo	$40.
+postcode	$10.
+address	$100.
+AUM	BEST32.
+リスクAUM	BEST32.;
+run;
+
+%end;
+
+%mend manki5;
+
+%manki5
+
+/* 201604 */
+data work.mankilist_201604;
+infile manki(満期リスト_201604.csv)	delimiter = ',' missover dsd lrecl=10000 firstobs=2;
+input
+GCIF	:$10.
+Haifu_buten	:$30.
+予備	:$2.
+担当者ID_入力用	:$10.
+担当者ID_配布時点（確認用）	:$10.
+R_SFC	:$10.
+R区分	:$25.
+DBTフラグ	:BEST32.
+前月満期リストアサイン担当者	:$10.
+ポテリスト掲載客	:BEST12.
+ポテリストアサイン担当者	:$10.
+Last_Con_Staff	:$10.
+Last_Con_Day	:YYMMDD10.
+Last_Act_Staff	:$10.
+Last_Act_Day	:YYMMDD10.
+Last_Jit_Staff	:$10.
+設定部店／チャネル	:$12.
+E区分	:$14.
+状況▼	:$6.
+コメント欄	:$1.
+満期DM送付先	:$12.
+COD_PROD	:BEST32.
+MANKI_SHN_2	:$20.
+SHNNM	:$100.
+COD_TENOR	:$4.
+AMT_PRIN_TCY	:BEST32.
+COD_TXN_CCY	:$5.
+AMT_EOM_LCY	:BEST32.
+DAT_INITL_DEP	:YYMMDD10.
+DAT_MATURITY	:YYMMDD10.
+CONTRACTED_INT_RAT	:BEST32.
+aitai_ccy	:$5.
+strike	:BEST32.
+strike1	:BEST32.
+strike2	:BEST32.
+shueki	:BEST32.
+sex	:$6.
+age	:BEST32.
+syokugyo	:$40.
+postcode	:$10.
+address	:$100.
+AUM	:BEST32.
+リスクAUM	:BEST32.
+担当	:$10.
+スタッフ希望	:BEST32.
+円定期セットで戻し	:BEST32.
+配布部店12	:$16.;
+
+format
+GCIF	$10.
+Haifu_buten	$30.
+予備	$2.
+担当者ID_入力用	$10.
+担当者ID_配布時点（確認用）	$10.
+R_SFC	$10.
+R区分	$25.
+DBTフラグ	BEST32.
+前月満期リストアサイン担当者	$10.
+ポテリスト掲載客	BEST12.
+ポテリストアサイン担当者	$10.
+Last_Con_Staff	$10.
+Last_Con_Day	YYMMDD10.
+Last_Act_Staff	$10.
+Last_Act_Day	YYMMDD10.
+Last_Jit_Staff	$10.
+設定部店／チャネル	$12.
+E区分	$14.
+状況▼	$6.
+コメント欄	$1.
+満期DM送付先	$12.
+COD_PROD	BEST32.
+MANKI_SHN_2	$20.
+SHNNM	$100.
+COD_TENOR	$4.
+AMT_PRIN_TCY	BEST32.
+COD_TXN_CCY	$5.
+AMT_EOM_LCY	BEST32.
+DAT_INITL_DEP	YYMMDD10.
+DAT_MATURITY	YYMMDD10.
+CONTRACTED_INT_RAT	BEST32.
+aitai_ccy	$5.
+strike	BEST32.
+strike1	BEST32.
+strike2	BEST32.
+shueki	BEST32.
+sex	$6.
+age	BEST32.
+syokugyo	$40.
+postcode	$10.
+address	$100.
+AUM	BEST32.
+リスクAUM	BEST32.
+担当	$10.
+スタッフ希望	BEST32.
+円定期セットで戻し	BEST32.
+配布部店12	$16.;
+run;
+
+/************************/
+
+
+/** METADATA **/
+proc sql;
+create table Manki_ALL as
+select substr(memname,index(memname,"_")+1) as YM,memname,nobs,nvar,crdate
+from dictionary.tables
+where libname='WORK'  and memname like 'MANKILIST%';quit;
+quit;
+
+proc sql;
+create table Manki_table as
+select substr(memname,index(memname,"_")+1) as YM,memname,name,type,format,informat,label
+from dictionary.columns
+where libname='WORK' and memname like 'MANKILIST%';quit;
+
+proc transpose data=manki_table out=manki_table_T(drop=_name_ _label_);
+var name;
+by YM;
+run;
+
+data Manki_Metadata;
+merge 	Manki_Table_t(in=t1)
+		Manki_all(keep=YM nobs nvar);
+by YM;
+run;
+
+proc sql;
+create table Manki_Metadata as
+select YM,nobs,nvar,*
+from Manki_metadata;
+quit;
+
+proc sql;
+create table Manki_Col_Ref as
+select distinct Name,Type,Informat,Format,Label
+from Manki_table
+order by Name;
+quit;
+
+/**************/
+
+/****** DATA CLEANING  *********/
+data Manki_Col_Ref;
+set Manki_Col_Ref;
+
+if Name='Haifu_buten' then Label='配布部店';
+else if Name='GCIF' then Label='GCIF ID';
+else if Name='staffid' then Label='担当者';
+else if Name='R_SFC' then Label='リレーション担当者';
+else if Name='Last_Con_Staff' then Label='最終コンタクト者';
+else if Name='Last_Con_Day' then Label='最終コンタクト日';
+else if Name='Last_Act_Staff' then Label='最終活動者';
+else if Name='Last_Act_Day' then Label='最終活動日';
+else if Name='Last_Jit_Staff' then Label='最終実績者';
+
+else if Name='COD_PROD' then Label='商品コード';
+else if Name='MANKI_SHN_2' then Label='商品区分';
+else if Name='SHNNM' then Label='商品名';
+else if Name='COD_TENOR' then Label='預入期間';
+else if Name='AMT_PRIN_TCY' then Label='預入元本（原通貨）';
+else if Name='COD_TXN_CCY' then Label='預入原通貨';
+else if Name='AMT_EOM_LCY' then Label='預入元本（直近円換算）';
+else if Name='DAT_INITL_DEP' then Label='預入日';
+else if Name='DAT_MATURITY' then Label='満期日_当初満期日';
+else if Name='CONTRACTED_INT_RAT' then Label='約定利率';
+else if Name='aitai_ccy' then Label='PTP_PT_相対通貨';
+else if Name='strike' then Label='PTP_PT_特約設定レート';
+else if Name='strike1' then Label='PT3_AUD_特約設定レート';
+else if Name='strike2' then Label='PT3_NZD_特約設定レート';
+else if Name='shueki' then Label='円スタートDCD系_損益見込';
+else if Name='sex' then Label='性別';
+else if Name='age' then Label='年齢';
+else if Name='syokugyo' then Label='職業';
+else if Name='postcode' then Label='郵便番号';
+else if Name='address' then Label='住所';
+
+Informat=Format;
+
+run;
+
+proc sql noprint;
+select count(name) format 3. INTO:Obs /*全体項目の数字を一つにmacvarに設定*/
+from Manki_Col_Ref;quit;
+
+proc sql noprint;
+select name,informat,format,label INTO 	:Nm1 - :Nm999,	/*それぞれ項目のプロパティ―をmacvarに設定*/
+										:Infmt1- :Infmt999,
+										:Fmt1-:Fmt999,
+										:Lbl1-:Lbl999
+from Manki_Col_Ref;
+quit;
+
+%let s_cut =1 ;  	/*yymm1 = 1304 */
+%let e_cut =42 ;	/*yymm42 = 1609*/
+
+%macro data_clean;
+%do i=&s_cut %to &e_cut;
+
+	data MANKILIST_20&&yymm&i;
+	set MANKILIST_20&&yymm&i;
+
+	gcif1=strip(put(gcif,10.));
+
+	if length(gcif1)=3 then GCIF1='0000000'||strip(gcif); /*いくつか生データセットはGCIFを数字として対応し、先頭のゼロが消えます。*/
+	else if length(gcif1)=4 then GCIF1='000000'||strip(gcif);
+	else if length(gcif1)=5 then GCIF1='00000'||strip(gcif);
+	else if length(gcif1)=6 then GCIF1='0000'||strip(gcif);
+	else if length(gcif1)=7 then GCIF1='000'||strip(gcif);
+	else if length(gcif1)=8 then GCIF1='00'||strip(gcif);
+	else if length(gcif1)=9 then GCIF1='0'||strip(gcif);
+	else if length(gcif1)=10 then GCIF1=strip(gcif);
+
+	drop gcif;
+	rename gcif1=GCIF;
+
+	if COD_TXN_CCY='円' then COD_TXN_CCY='JPY';
+	if Haifu_buten='0' then Haifu_buten='';
+ 
+	run;
+
+	proc datasets lib=work nodetails nolist;	/*macvarに利用により、それぞれ項目にプロパティ―を追加*/
+	modify MANKILIST_20&&yymm&i; 
+		%do j=1 %to &obs;
+		attrib &&nm&j informat=&&infmt&j format=&&fmt&j  label="&&lbl&j";
+		%end;
+	quit;	
+	
+	proc sql;
+	create table MANKILIST_20&&yymm&i as
+	select gcif,Haifu_buten,予備,*
+	from MANKILIST_20&&yymm&i;quit;
+
+%end;
+
+%mend data_clean;
+
+%data_clean
+
+
+
+
+
+
+
+/*EDA*/
+data test;
+set MANKILIST_201404;
+
+text=index(gcif,".");
+run;
+
+proc sort data=test;by text;run; /*shows where data is offset on about 15 records*/
+
+ 
+%let s_cut =1 ;  	/*yymm1 = 1304 */
+%let e_cut =42 ;	/*yymm42 = 1609*/
+%let var=状況▼;
+
+%macro test;
+%do i=&s_cut %to &e_cut;
+
+	%if &i=&s_cut %then %do;
+		data col_master;
+		set MANKILIST_20&&yymm&i(keep=gcif &var);
+		YM=&&yymm&i;
+		run;
+	%end;
+
+	%else %do;
+		data col_master;
+		set col_master
+			MANKILIST_20&&yymm&i(in=t2 keep=gcif &var);
+		if t2 then YM=&&yymm&i;
+		run;
+	%end;
+
+%end;
+
+%mend test;
+
+%test
+
+
+
+proc sort data=col_Master;by &var;run;
+
+
+
+proc datasets lib=work;
+modify 
+	proc sql;
+	create table test as
+	select gcif,配布部店,予備,担当者ID_入力用,*
+	from MANKILIST_201505;quit;
+
+proc sql;
+create table test as
+select memname,name,type,format,informat,label
+from dictionary.columns
+where libname='RAW' and label like '%状況%';quit;
+
+
+
+
+
+/* CJ 1*/
+proc sql;
+create table GCIF_PID as
+select gcif,pid, dhms(DAT_ACCT_OPEN,hour(0),minute(0),second(0)) as AC_OPEN_Dt format=datetime15.,
+dhms(DAT_LAST_MNT+1,hour(0),minute(0),second(0))-1 as AC_CLSD_Dt format=datetime15.,OPEN_BTN
+from raw.gcif_pid
+order by gcif,pid;
+quit;
+
+proc sql;
+create table SBL_ZOK as
+select t1.gcif,t2.pid,syokugyo,syokubun,sex,birth_D,
+dhms(s_day,hour(0),minute(0),second(0)) as Trhk_Start_Dt format=datetime15.,
+postcode,address,adtype,C_type,nenkin,SB_Sec_Acct
+from raw.SBL_ZOK_201608 as t1 left join GCIF_PID(keep=GCIF PID) as t2 on t1.GCIF=t2.GCIF
+order by t1.gcif,t2.pid;
+quit;
+
+proc sql;
+create table AO_Purpose as
+select gcif,pid,dhms(Account_Open_DT,hour(0),minute(0),second(0)) as Account_Open_DT format=datetime15.,AO_purpose
+from raw.Ao_Purpose 
+order by gcif,pid;
+quit;
+
+
+/*TEST*/
+proc sql;
+create table test as 
+select gcif,t1.pid,*,Account_Open_DT
+from GCIF_PID as t1 left join ao_purpose(keep=pid  Account_Open_DT) as t2 on t1.pid=t2.pid
+where not missing(Account_Open_DT) and t1.AC_OPEN_Dt=t2.Account_Open_DT
+order by Account_Open_DT;
+quit;
+/***/
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
