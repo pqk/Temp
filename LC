@@ -1,0 +1,1356 @@
+/*LC*/
+options compress=char;
+libname Luxcard "\\ssosn1527\sas$\個人部門\リテール営業統轄部\output\個人\225273_Peter_Kirsch\LuxCard";
+
+/*** Initial Date ***/
+%let ST='1jan2011'd; 	/*--> s_cut=1*/
+       
+data _null_;		/*n= months elapsed from s_cut=1 to today() nはs_cut=1～本日の間の経過月数*/
+        call symput ("n",strip(intck("month",&ST-1,intnx('day',intnx('month',today(),0),-1)))) ;
+run;
+
+%put %nrstr(&n =) &n;/* Check */
+
+data _null_;	/*creates monthly macvar series from &ST to today()*/
+	%macro YM1;
+		%do i= 0 %to &n ;
+			call symput("yymm&i" ,put(intnx("month",&ST-1,%eval(&i),"end"),yymmdd4.));
+		%end;
+	%mend YM1;
+	%YM1 ;
+run;
+
+%macro YM2 ; /*output to log all yymm&i macvar*/
+	%do i= 0 %to &n ;
+		%put yymm&i = &&yymm&i;
+	%end ;
+%mend YM2;
+%YM2 ;
+
+%let as_of=66; 	/*YYMM66 1606  */
+
+
+/****** 預金残高  ******/
+proc sort data=ads.SCORE_RAW_201606 out=SCORE_RAW_201606(keep=gcif AUM_AVG_AMT AUM_AMT PERI_INAMT_AVG_SAL
+															PERI_INAMT_AVG_OTH PERI_OUTAMT_AVG DIRECTDEBIT_AVG);
+by GCIF;run;
+proc sort data=raw.EB_201606 out=EB_201606;by GCIF;run;
+
+data AUM_Bal(where=(	AUM_Flag NOT IN('1:月末平残_1000万未満','') or 
+						AUM_Avg_Flag NOT IN('1:月中平残_1000万未満','')));/*Luxury Card Vet*/
+merge eb_201606(in=t1 keep=gcif)
+	score_raw_201606(in=t2 keep=gcif AUM_AVG_AMT AUM_AMT);
+by gcif;
+if t1;
+
+length AUM_Flag $30 AUM_Avg_Flag $30;
+if AUM_AMT>0 and AUM_AMT<10000000 and AUM_AMT^=. then AUM_Flag='1:月末平残_1000万未満';/*ゼロ・ネガティブ残高除く*/
+else if AUM_AMT>=10000000 and AUM_AMT<=29999999 then AUM_Flag='2:月末平残_1000万以上';
+else if AUM_AMT>=30000000 and AUM_AMT<=49999999 then AUM_Flag='3:月末平残_3000万以上';
+else if AUM_AMT>=50000000 and AUM_AMT<=99999999 then AUM_Flag='4:月末平残_5000万以上';
+else if AUM_AMT>=100000000 and AUM_AMT<=299999999 then AUM_Flag='5:月末平残_1億以上';
+else if AUM_AMT>=300000000 then AUM_Flag='6:月末平残_3億以上';
+else if AUM_AMT=. then AUM_Flag='';
+
+if  AUM_AVG_AMT>0 and AUM_AVG_AMT<10000000 and AUM_AVG_AMT^=. then AUM_Avg_Flag='1:月中平残_1000万未満'; 
+else if AUM_AVG_AMT>=10000000 and AUM_AVG_AMT<=29999999 then AUM_Avg_Flag='2:月中平残_1000万以上';
+else if AUM_AVG_AMT>=30000000 and AUM_AVG_AMT<=49999999 then AUM_Avg_Flag='3:月中平残_3000万以上';
+else if AUM_AVG_AMT>=50000000 and AUM_AVG_AMT<=99999999 then AUM_Avg_Flag='4:月中平残_5000万以上';
+else if AUM_AVG_AMT>=100000000 and AUM_AVG_AMT<=299999999 then AUM_Avg_Flag='5:月中平残_1億以上';
+else if AUM_AVG_AMT>=300000000 then AUM_Avg_Flag='6:月中平残_3億以上';
+else if AUM_AVG_AMT=. then AUM_Avg_Flag='';
+
+format AUM_AVG_AMT comma20. AUM_AMT comma20.;
+
+run;
+
+
+/****** 国内入出金  ******/
+data Domestic_IB_OB(where=(	Avg_Salary NOT IN('1:給与振込_100万未満','') or
+							Avg_IB_Other NOT IN('1:給与以外振込_100万未満','') or
+							Avg_OB NOT IN('1:出金_100万未満','') or
+							Avg_DD NOT IN('1:口座引落_100万未満','')));/*Luxury Card Vet*/
+merge eb_201606(in=t1 keep=gcif)
+	score_raw_201606(in=t2 keep=gcif PERI_INAMT_AVG_SAL PERI_INAMT_AVG_OTH PERI_OUTAMT_AVG DIRECTDEBIT_AVG);
+by gcif;
+if t1;
+
+length Avg_Salary $30 Avg_IB_Other $30 Avg_OB $30 Avg_DD $30;
+/*給与振込*/
+if PERI_INAMT_AVG_SAL>=0 and PERI_INAMT_AVG_SAL<1000000 then Avg_Salary='1:給与振込_100万未満';
+else if PERI_INAMT_AVG_SAL>=1000000 and PERI_INAMT_AVG_SAL<=2999999 then Avg_Salary='2:給与振込_100万以上';
+else if PERI_INAMT_AVG_SAL>=3000000 and PERI_INAMT_AVG_SAL<=9999999 then Avg_Salary='3:給与振込_300万以上';
+else if PERI_INAMT_AVG_SAL>=10000000 then Avg_Salary='4:給与振込_1000万以上';
+else if PERI_INAMT_AVG_SAL=. then Avg_Salary='';
+
+/*入金*/
+if PERI_INAMT_AVG_OTH>=0 and PERI_INAMT_AVG_OTH<1000000 then Avg_IB_Other='1:給与以外振込_100万未満';
+else if PERI_INAMT_AVG_OTH>=1000000 and PERI_INAMT_AVG_OTH<=2999999 then Avg_IB_Other='2:給与以外振込_100万以上';
+else if PERI_INAMT_AVG_OTH>=3000000 and PERI_INAMT_AVG_OTH<=9999999 then Avg_IB_Other='3:給与以外振込_300万以上';
+else if PERI_INAMT_AVG_OTH>=10000000 then Avg_IB_Other='4:給与以外振込_1000万以上';
+else if PERI_INAMT_AVG_OTH=. then Avg_IB_Other='';
+
+/*出金*/
+if PERI_OUTAMT_AVG>=0 and PERI_OUTAMT_AVG<1000000 then Avg_OB='1:出金_100万未満';
+else if PERI_OUTAMT_AVG>=1000000 and PERI_OUTAMT_AVG<=2999999 then Avg_OB='2:出金_100万以上';
+else if PERI_OUTAMT_AVG>=3000000 and PERI_OUTAMT_AVG<=9999999 then Avg_OB='3:出金_300万以上';
+else if PERI_OUTAMT_AVG>=10000000 then Avg_OB='4:出金_1000万以上';
+else if PERI_OUTAMT_AVG=. then Avg_OB='';
+
+/*口座引落*/
+if DIRECTDEBIT_AVG>=0 and DIRECTDEBIT_AVG<1000000 then Avg_DD='1:口座引落_100万未満';
+else if DIRECTDEBIT_AVG>=1000000 and DIRECTDEBIT_AVG<=2999999 then Avg_DD='2:口座引落_100万以上';
+else if DIRECTDEBIT_AVG>=3000000 and DIRECTDEBIT_AVG<=9999999 then Avg_DD='3:口座引落_300万以上';
+else if DIRECTDEBIT_AVG>=10000000 then Avg_DD='4:口座引落_1000万以上';
+else if DIRECTDEBIT_AVG=. then Avg_DD='';
+
+format PERI_INAMT_AVG_SAL comma20. PERI_INAMT_AVG_OTH comma20. PERI_OUTAMT_AVG comma20. DIRECTDEBIT_AVG comma20.; 
+
+run;
+
+
+/****** カード利用金額  ******/
+
+data card_codes;/*クレジットカード支払可能性が高いコード*/
+infile datalines;
+input PMT_Comp :$10. @@; 
+cards;
+492 726 708 822 868 830 466 518 560 673 709 719 741 805 808 810 811 814 816 818 833 838 866 869 883 934 939
+;
+proc sort data=card_codes;by PMT_Comp;run;
+
+/* data set-up*/
+
+%let s_cut =61 ;  	/*YYMM61 1601 */
+%let e_cut =66 ;	/*YYMM66 1606 */
+%let as_of=66;	
+
+%macro Card_PMT;
+%do i=&s_cut %to &e_cut;
+
+	proc sql;
+	create table Card_pmt_&&yymm&i as
+	select &&yymm&i as YM,GCIF,PMT_COMP,PMT_CMP_JPN,Amt_txn_tcy as AutoPay_AMT/*sum(Amt_txn_tcy) as AutoPay_AMT*/
+	from raw.AUTO_PMT_20&&yymm&i as t1 left join raw.GCIF_PID(keep=GCIF PID) as t2 on t1.PID=t2.PID
+	where pmt_Comp in (select * from card_codes) and GCIF IN(select GCIF from raw.EB_20&&yymm&as_of)
+	group by gcif,PMT_Comp,PMT_CMP_JPN
+	order by GCIF,PMT_Comp;
+	quit;
+
+%end;
+
+data Card_pmt;
+	set
+	%do y =&s_cut %to &e_cut %by 1;
+
+		Card_pmt_&&yymm&y
+		
+	%end ;
+	;
+run ;
+
+%do z=&s_cut %to &e_cut;
+	proc sql;
+	drop table Card_pmt_&&yymm&z; /*macro*/
+	quit;
+%end;
+
+%mend Card_PMT;
+
+%Card_PMT
+
+proc sql;
+create table a as
+select 	gcif,round(mean(Mo_Cards),1) as Ave_N_Cards,round(mean(Mo_N_PMTs),1) as Ave_N_CardPMT,
+		mean(Mo_TTL_PMT) as Ave_Mo_CardPMT format=comma20.,max(Max_PMT) as Max_CardPMT format=comma20.,std(Mo_TTL_PMT) as Sigma_Mo_CardPMT format=comma20.
+from (select 	YM,gcif,count(distinct pmt_comp) as Mo_Cards,count(gcif) as Mo_N_PMTs,
+				sum(AutoPay_AMT) as Mo_TTL_PMT,max(AutoPay_AMT) as Max_PMT
+				from Card_PMT group by Gcif,YM)
+group by gcif;
+quit;
+
+data Card_PMT_SUM(where=(Ave_Card_PMT NOT IN('1:引落金額_50万未満','')));/*Luxury Card Vet*/
+set a;
+
+length Ave_Card_PMT $20;
+if Ave_Mo_CardPMT>=0 and Ave_Mo_CardPMT<500000 then Ave_Card_PMT='1:引落金額_50万未満';
+else if Ave_Mo_CardPMT>=500000 and Ave_Mo_CardPMT<=999999 then Ave_Card_PMT='2:引落金額_50万以上';
+else if Ave_Mo_CardPMT>=1000000 and Ave_Mo_CardPMT<=1999999 then Ave_Card_PMT='3:引落金額_100万以上';
+else if Ave_Mo_CardPMT>=2000000 then Ave_Card_PMT='4:引落金額_200万以上';
+else if Ave_Mo_CardPMT=. then Ave_Card_PMT='';
+
+length Ave_Card_Use $5;
+if Ave_N_Cards>=1 and Ave_N_Cards<=3 then Ave_Card_Use='1:1-3';
+else if Ave_N_Cards>=4 and Ave_N_Cards<=6 then Ave_Card_Use='2:4-6';
+else if Ave_N_Cards>=7 and Ave_N_Cards<=9 then Ave_Card_Use='3:7-9';
+else if Ave_N_Cards>=10 then Ave_Card_Use='4:10+';
+else if Ave_N_Cards=. then Ave_Card_Use='';
+run;
+
+
+/***  高額住宅地  ***/
+proc sql;
+create table a as
+select t1.gcif,age,AUM_in_SEC_brkrg,Crisk_AUM_ex_SEC,SB_Sec,postcode, pref_name,city_name,township,
+		case
+		when AUM_in_SEC_brkrg>=10000000 then 1
+		else 0 end as amt_f
+from EB_201606 as t1 left join (select * from raw.sbl_zok_201606 as t2 left join raw.MST_YUBIN_S as t3 on t2.postcode=t3.postcode) as t4 
+					 on t1.gcif=t4.gcif;
+quit;
+
+proc sql;
+create table b as
+select pref_name, city_name, township, count(GCIF) AS G_Cnt, SUM(amt_f) AS amt_f_Cnt,
+		case
+		when calculated amt_f_Cnt>0 then  calculated amt_f_Cnt / calculated G_Cnt end as Per001
+from a
+group by pref_name,city_name,township
+having pref_name in ('東京都','大阪府','兵庫県') and G_Cnt>20 and Per001>.1
+order by calculated per001 desc;
+quit;
+
+proc sql;
+create table Address as
+select t1.gcif,AUM_in_SEC_brkrg,Crisk_AUM_ex_SEC,SB_Sec,postcode,t1.pref_name,t1.city_name,t1.township,case
+	when t1.pref_name='東京都' and t1.city_name in ('千代田区','中央区','港区','新宿区','文京区','台東区','墨田区','江東区',
+												'品川区','目黒区','大田区','世田谷区','渋谷区','中野区','杉並区','豊島区',
+												'北区','荒川区','板橋区','練馬区','足立区','葛飾区','江戸川区') then '東京区内'
+	when t1.pref_name='東京都' and t1.city_name not in ('千代田区','中央区','港区','新宿区','文京区','台東区','墨田区','江東区',
+												'品川区','目黒区','大田区','世田谷区','渋谷区','中野区','杉並区','豊島区',
+												'北区','荒川区','板橋区','練馬区','足立区','葛飾区','江戸川区') then '東京区外'
+	when t1.pref_name='大阪府' then '大阪府'
+	when t1.pref_name='兵庫県' then '兵庫県' end as Address_Cat,
+	amt_f,t2.G_Cnt,t2.Amt_f_Cnt,t2.Per001
+from a as t1, b as t2
+where t1.pref_name=t2.pref_name and t1.city_name=t2.city_name and t1.township=t2.township
+having amt_f=1;
+quit;
+/**************/
+
+
+/***  HL  ***/
+libname aoki "E:\sas\個人部門\リテール営業統轄部\output\個人\213826_Aoki_Katsunori\sasdata\" ;
+
+proc sort data=aoki.hl_cust presorted;by gcif;run;
+proc sort data=aoki.hl_target_flg presorted;by gcif;run;
+
+data HL_Target;
+merge aoki.HL_Cust(drop=pid)
+	 aoki.HL_Target_Flg;
+by gcif;
+
+if flg_nenshu='04_2000万円以上' or flg_nenshu='05_3000万円以上' then flg_nenshu='04_2000万円以上';
+if flg_nenshu='06_5000万円以上' or flg_nenshu='07_10000万円以上' then flg_nenshu='06_5000万円以上';
+
+if flg_prepay='02_10万円以上' or flg_prepay='03_20万円以上' or flg_prepay='04_30万円以上' or flg_prepay='05_40万円以上' then flg_prepay='02_10万円以上';
+if flg_prepay='06_50万円以上' or flg_prepay='07_60万円以上' or flg_prepay='08_70万円以上' or flg_prepay='09_80万円以上' or flg_prepay='10_90万円以上' then flg_prepay='06_50万円以上';
+
+run;
+
+
+/***  OGAWA PART  ***/
+data LC_Target(keep=gcif R顧客_201606 職業 世帯年収 個人年収 Intl_Remit_IB Intl_Remit_OB);
+infile '\\ssosn1527\sas$\個人部門\リテール営業統轄部\input\個人\225273_Peter_Kirsch\LCﾀｰｹﾞｯﾄ顧客_Ogawa.csv'
+	delimiter = ',' missover dsd lrecl=120 firstobs=2;
+input 	GCIF :$10.
+R顧客_201606 :3. 
+職業_会社役員 :3.
+職業_医者 :3.
+職業_自営業 :3.
+'1:世帯年収_1000万以上'n :3.
+'2:世帯年収_1500万以上'n :3.
+'1:個人年収_1000万以上'n :3.
+'2:個人年収_1500万以上'n :3.
+'1:海外送金_入金_100万以上'n :3.
+'2:海外送金_入金_300万以上'n :3.
+'3:海外送金_入金_1000万以上'n :3.
+'1:海外送金_出金_100万以上'n :3.
+'2:海外送金_出金_300万以上'n :3.
+'3:海外送金_出金_1000万以上'n :3.;
+
+if '職業_会社役員'n=1 then 職業='会社役員';
+else if '職業_医者'n=1 then 職業='医者';
+else if '職業_自営業'n=1 then 職業='自営業';
+
+length 世帯年収 $20 個人年収 $20 Intl_Remit_IB $20 Intl_Remit_OB $20;
+
+if '1:世帯年収_1000万以上'n=1 then 世帯年収='1:1000万以上';
+else if '2:世帯年収_1500万以上'n=1 then 世帯年収='2:1500万以上';
+
+if '1:個人年収_1000万以上'n=1 then 個人年収='1:1000万以上';
+else if '2:個人年収_1500万以上'n=1 then 個人年収='2:1500万以上';
+
+if '1:海外送金_入金_100万以上'n=1 then Intl_Remit_IB='1:入金_100万以上';
+else if '2:海外送金_入金_300万以上'n=1 then Intl_Remit_IB='2:入金_300万以上';
+else if '3:海外送金_入金_1000万以上'n=1 then Intl_Remit_IB='3:入金_1000万以上';
+
+if '1:海外送金_出金_100万以上'n=1 then Intl_Remit_OB='1:出金_100万以上';
+else if '2:海外送金_出金_300万以上'n=1 then Intl_Remit_OB='2:出金_300万以上';
+else if '3:海外送金_出金_1000万以上'n=1 then Intl_Remit_OB='3:出金_1000万以上';
+
+if length(gcif)=3 then GCIF='0000000'||strip(gcif);
+else if length(gcif)=4 then GCIF='000000'||strip(gcif);
+else if length(gcif)=5 then GCIF='00000'||strip(gcif);
+else if length(gcif)=6 then GCIF='0000'||strip(gcif);
+else if length(gcif)=7 then GCIF='000'||strip(gcif);
+else if length(gcif)=8 then GCIF='00'||strip(gcif);
+else if length(gcif)=9 then GCIF='0'||strip(gcif);
+run;
+proc sort data=LC_Target;by gcif;run;
+
+
+/******  海外ATM利用  *******/
+%let s_cut =55 ;  	/*YYMM55 1507 */
+%let e_cut =66 ;	/*YYMM66 1606 */
+
+%macro Intl_ATM;
+%do i=&s_cut %to &e_cut;
+
+	proc sql;
+	create table _&&yymm&i as
+	select &&yymm&i as YM,gcif,sum(txn_amt) as Trx_AMT
+	from raw.ATM_DETAILS_20&&yymm&i as t1 left join raw.GCIF_PID(keep=GCIF PID) as t2 on t1.PID=t2.PID
+	where	channel='LONGS'
+	group by gcif;
+	quit;
+
+%end;
+
+data Intl_ATM;
+	set
+	%do y =&s_cut %to &e_cut %by 1;
+
+		_&&yymm&y
+		
+	%end ;
+	;
+run ;
+
+%do z=&s_cut %to &e_cut;
+	proc sql;
+	drop table _&&yymm&z;
+	quit;
+%end;
+
+%mend Intl_ATM;
+%Intl_ATM
+
+proc sql;
+create table Intl_ATM_SUM as
+select gcif,sum(trx_amt) as Intl_ATM_AMT,sum(trx_amt)*.04 as 'Intl_ATM_4%'n,case
+	when sum(trx_amt)*.04>=50000 then '2:5万以上'
+	else '1:5万未満' end as Intl_ATM_Flag 
+from Intl_ATM
+group by gcif;
+quit;
+/*******/
+
+
+/******  円定期設定データ  *******/
+/*JPY_Teiki.csvは  \\ssbkd\k$\K_drv\k_RSS\RSD-Project\Daily\Daily Open&Close.accdb [●円定期設定データ]のテーブルをCSV形式に変更した。*/
+proc import
+datafile='\\ssosn1527\sas$\個人部門\リテール営業統轄部\input\個人\225273_Peter_Kirsch\JPY_Teiki.csv'
+out=JPY_Teiki
+dbms=csv
+replace;
+run;
+
+data JPY_Teiki;
+set JPY_Teiki;
+
+gcif1=strip(put(GCIF_ID,10.));
+pid1=strip(put(pid,10.));
+
+if length(gcif1)=3 then GCIF='0000000'||strip(gcif1); 
+else if length(gcif1)=4 then GCIF='000000'||strip(gcif1);
+else if length(gcif1)=5 then GCIF='00000'||strip(gcif1);
+else if length(gcif1)=6 then GCIF='0000'||strip(gcif1);
+else if length(gcif1)=7 then GCIF='000'||strip(gcif1);
+else if length(gcif1)=8 then GCIF='00'||strip(gcif1);
+else if length(gcif1)=9 then GCIF='0'||strip(gcif1);
+else if length(gcif1)=10 then GCIF=strip(gcif1);
+
+drop GCIF_ID gcif1 PID;
+rename pid1=PID;
+run;
+
+data a(keep=gcif pid 商品 設定額 Shnnm_Taishou);
+set jpy_teiki;
+
+if 商品='円定期セット' or 商品='資産運用パック' then Shnnm_Taishou='円定期セット or 資産運用パック';
+else  Shnnm_Taishou='その他';
+where not missing(GCIF);
+run;
+proc sort data=a;by gcif Shnnm_Taishou;run;
+
+data 	JPY_Teiki_ttl(drop=PID 商品 設定額 g_cnt s_cnt check rename=(s_ttl=JPY_Teiki_TTL rng=JPY_Teiki_Rng)) 
+		Other_Teiki_ttl(drop=PID 商品 設定額 g_cnt s_cnt check rename=(s_ttl=Other_Teiki_TTL rng=Other_Teiki_Rng)) ;
+set a;
+by gcif Shnnm_Taishou;
+
+if first.gcif then g_cnt=0;
+g_cnt+1;
+
+if first.Shnnm_Taishou then do; s_cnt=0;s_ttl=0;end;
+s_cnt+1;
+
+retain;
+s_ttl=s_ttl+設定額;
+
+if g_cnt^=s_cnt then check=1;else check=0;
+
+if last.shnnm_taishou;
+
+if s_ttl>=10000000 then Rng='1:1000万以上';
+else Rng='2:1000万未満';
+
+if Shnnm_Taishou='円定期セット or 資産運用パック' then output JPY_Teiki_ttl;
+else output Other_Teiki_ttl;
+run;
+
+proc sql;
+create table JPY_Teiki_ttl(drop=Shnnm_Taishou) as
+select coalesce(t1.GCIF,t2.GCIF) as gcif,*
+from JPY_Teiki_ttl as t1 full join Other_Teiki_ttl as t2 on t1.gcif=t2.gcif
+order by gcif;
+quit;
+/*******/
+
+
+/******  取引・サービス利用の顧客行動(OGAWA PART II)  *******/
+proc import
+datafile='\\ssosn1527\sas$\個人部門\リテール営業統轄部\input\個人\225273_Peter_Kirsch\LCﾀｰｹﾞｯﾄ顧客行動（外貨・投信他)2.csv'
+out=LC_Target_CustBehvr
+dbms=csv
+replace;
+run;
+
+data LC_Target_CustBehvr;
+set LC_Target_CustBehvr;
+
+gcif1=strip(put(GCIF,10.));
+
+if length(gcif1)=3 then GCIF1='0000000'||strip(gcif1); 
+else if length(gcif1)=4 then GCIF1='000000'||strip(gcif1);
+else if length(gcif1)=5 then GCIF1='00000'||strip(gcif1);
+else if length(gcif1)=6 then GCIF1='0000'||strip(gcif1);
+else if length(gcif1)=7 then GCIF1='000'||strip(gcif1);
+else if length(gcif1)=8 then GCIF1='00'||strip(gcif1);
+else if length(gcif1)=9 then GCIF1='0'||strip(gcif1);
+else if length(gcif1)=10 then GCIF1=strip(gcif1);
+
+drop GCIF;
+rename GCIF1=GCIF;
+
+length IntlRemit_Trx $20 INV_Trx $25;
+
+if 外貨取引あり=1 and 外貨取引1000万以上=1 then FX_Trx='2:1000万以上';
+else if 外貨取引あり=1 and 外貨取引1000万以上=0 then FX_Trx='1:1000万未満';
+else if 外貨取引あり=0 and 外貨取引1000万以上=0 then FX_Trx='';
+
+if 投信取引あり=1 and 投信取引1000万以上あり=1 and NISAなし=0 then INV_Trx='2:1000万以上';
+else if 投信取引あり=1 and 投信取引1000万以上あり=0 and NISAなし=0 then INV_Trx='1:1000万未満';
+else if 投信取引あり=0 and 投信取引1000万以上あり=0 and NISAなし=0 then INV_Trx='';
+else if 投信取引あり=1 and NISAなし=1  then INV_Trx='3:投信取引あり_NISAなし';
+
+if 仕組債取引あり=1 and 仕組債1000万以上=1 then SB_Trx='2:1000万以上';
+else if 仕組債取引あり=1 and 仕組債1000万以上=0 then SB_Trx='1:1000万未満';
+else if 仕組債取引あり=0 and 仕組債1000万以上=0 then SB_Trx='';
+
+if 海外送金あり=1 and 海外送金10回以上=1 and 海外送金非PL=0 then IntlRemit_Trx='2:10回以上';
+else if 海外送金あり=1 and 海外送金10回以上=0 and 海外送金非PL=0  then IntlRemit_Trx='1:10回未満';
+else if 海外送金あり=0 and 海外送金10回以上=0 and 海外送金非PL=0  then IntlRemit_Trx='';
+else if 海外送金あり=1 and 海外送金非PL=1 then IntlRemit_Trx='3:海外送金あり_非PL';
+
+drop 
+外貨取引あり
+外貨取引1000万以上
+投信取引あり
+投信取引1000万以上あり
+NISAなし
+仕組債取引あり
+仕組債1000万以上
+海外送金あり
+海外送金10回以上
+海外送金非PL;
+run;
+
+proc sql;
+create table LC_Target_CustBehvr as
+select gcif,*
+from LC_Target_CustBehvr;quit;
+/*******/
+
+
+/******  Tポイント利用状況  *******/
+%let s_cut =55 ;  	/*YYMM55 1507 */
+%let e_cut =66 ;	/*YYMM66 1606 */
+
+%macro tpoint;
+%do i=&s_cut %to &e_cut;
+
+	proc sql;
+	create table tp_&&yymm&i as
+	select  gcif,t1.pid,1 as Tpoint,*
+	from raw.T_ENTRY_20&&yymm&i as t1 left join raw.GCIF_PID(keep=GCIF PID) as t2 on t1.PID=t2.PID
+	where not missing(GCIF)
+	group by gcif
+	order by gcif,t1.pid;
+	quit;
+
+%end;
+
+data tpoint;
+	set
+	%do y =&s_cut %to &e_cut %by 1;
+
+		tp_&&yymm&y
+		
+	%end ;
+	;
+run ;
+
+%do z=&s_cut %to &e_cut;
+	proc sql;
+	drop table tp_&&yymm&z;
+	quit;
+%end;
+
+%mend tpoint;
+
+%tpoint
+
+proc sql;
+create table tpoint_SUM as
+select distinct gcif, tpoint
+from tpoint;
+quit;
+
+/*******/
+
+
+
+
+/***  MERGE ALL  ***/
+data zed;
+merge 
+	  LC_Target(in=t1)
+	  HL_Target(in=t2)
+	  AUM_Bal(in=t3)
+	  Domestic_IB_OB(in=t4)
+	  Address(in=t5)
+	  Card_PMT_SUM(in=t6)
+	  Intl_ATM_SUM(in=t7)
+	  LC_Target_CustBehvr(in=t8)
+	  JPY_Teiki_ttl(in=t9);
+
+by gcif;
+*if t1 or t2;
+*if t1 or t2 or t3;
+*if t1 or t2 or t3 or t4;
+*if t1 or t2 or t3 or t4 or t5;
+*if t1 or t2 or t3 or t4 or t5 or t6;
+*if t1 or t2 or t3 or t4 or t5 or t6 or t7;
+*if t1 or t2 or t3 or t4 or t5 or t6 or t7 or t8;
+if t1 or t2 or t3 or t4 or t5 or t6 or t7 or t8 or t9;
+run;
+
+data zed;
+merge zed(in=t1)
+	  tpoint_SUM;
+by gcif;
+if t1;
+run;
+
+proc sql; /* 解約・銀員除外対象 & 属性関連追加*/
+create table LC_Target_data as
+select t1.gcif,*
+from zed as t1 left join (select gcif,syokugyo,syokubun,sex,age from raw.sbl_zok_201606) as t2 on t1.gcif=t2.gcif
+where t1.gcif not in(select gcif from raw.sbl_zok_201607 where C_Type='C') or 
+	t1.gcif not in(select gcif from raw.ng_201607 where koin_ng=1);
+quit;
+
+
+/** PATTERN I ALL **/
+%let ds=luxcard.LC_Target_Survey;/*LC_Target_data LC_Target_survey */
+%let Survey=count('3.01'n) as Cnt3_01,	count('3.02'n) as Cnt3_02,	count('3.03'n) as Cnt3_03,	count('3.04'n) as Cnt3_04,	count('3.05'n) as Cnt3_05,	count('3.06'n) as Cnt3_06,	count('3.07'n) as Cnt3_07,	count('3.08'n) as Cnt3_08,	count('3.09'n) as Cnt3_09,	count('3.1'n) as Cnt3_1,	count('3.11'n) as Cnt3_11,	count('3.12'n) as Cnt3_12,	count('3.13'n) as Cnt3_13,	count('3.14'n) as Cnt3_14,	count('3.15'n) as Cnt3_15,	count('3.16'n) as Cnt3_16,	count('3.17'n) as Cnt3_17,	count('3.18'n) as Cnt3_18,	count('3.19'n) as Cnt3_19,	count('4.01'n) as Cnt4_01,	count('5.01'n) as Cnt5_01,	count('5.02'n) as Cnt5_02,	count('6.01'n) as Cnt6_01,	count('7.01'n) as Cnt7_01,	count('8.01'n) as Cnt8_01,	count('8.02'n) as Cnt8_02,	count('9.01'n) as Cnt9_01,	count('9.02'n) as Cnt9_02,	count('9.03'n) as Cnt9_03,	count('9.04'n) as Cnt9_04,	count('9.05'n) as Cnt9_05,	count('9.06'n) as Cnt9_06,	count('9.07'n) as Cnt9_07,	count('9.08'n) as Cnt9_08,	count('9.09'n) as Cnt9_09,	count('9.1'n) as Cnt9_1,	count('9.11'n) as Cnt9_11,	count('9.12'n) as Cnt9_12,	count('10.01'n) as Cnt10_01,	count('10.02'n) as Cnt10_02,	count('10.03'n) as Cnt10_03,	count('10.04'n) as Cnt10_04,	count('10.05'n) as Cnt10_05,	count('10.06'n) as Cnt10_06,	count('10.07'n) as Cnt10_07,	count('10.08'n) as Cnt10_08,	count('10.09'n) as Cnt10_09,	count('10.1'n) as Cnt10_1,	count('10.11'n) as Cnt10_11,	count('10.12'n) as Cnt10_12,	count('10.13'n) as Cnt10_13,	count('10.14'n) as Cnt10_14,	count('10.15'n) as Cnt10_15,	count('11.01'n) as Cnt11_01,	count('11.02'n) as Cnt11_02,	count('11.03'n) as Cnt11_03,	count('11.04'n) as Cnt11_04,	count('11.05'n) as Cnt11_05,	count('11.06'n) as Cnt11_06,	count('11.07'n) as Cnt11_07,	count('11.08'n) as Cnt11_08,	count('11.09'n) as Cnt11_09,	count('11.1'n) as Cnt11_1,	count('11.11'n) as Cnt11_11,	count('12.01'n) as Cnt12_01,	count('12.02'n) as Cnt12_02,	count('12.03'n) as Cnt12_03,	count('12.04'n) as Cnt12_04,	count('12.05'n) as Cnt12_05,	count('12.06'n) as Cnt12_06,	count('12.07'n) as Cnt12_07,	count('12.08'n) as Cnt12_08,	count('12.09'n) as Cnt12_09,	count('12.1'n) as Cnt12_1,	count('12.11'n) as Cnt12_11,	count('12.12'n) as Cnt12_12,	count('12.13'n) as Cnt12_13,	count('12.14'n) as Cnt12_14,	count('12.15'n) as Cnt12_15,	count('12.16'n) as Cnt12_16,	count('12.17'n) as Cnt12_17,	count('12.18'n) as Cnt12_18,	count('13.01'n) as Cnt13_01,	count('14.01'n) as Cnt14_01,	count('14.02'n) as Cnt14_02,	count('14.03'n) as Cnt14_03,	count('14.04'n) as Cnt14_04,	count('14.05'n) as Cnt14_05,	count('14.06'n) as Cnt14_06,	count('14.07'n) as Cnt14_07,	count('14.08'n) as Cnt14_08,	count('14.09'n) as Cnt14_09,	count('14.1'n) as Cnt14_1,	count('14.11'n) as Cnt14_11,	count('14.12'n) as Cnt14_12,	count('14.13'n) as Cnt14_13,	count('14.14'n) as Cnt14_14,	count('14.15'n) as Cnt14_15,	count('14.16'n) as Cnt14_16,	count('14.17'n) as Cnt14_17,	count('15.01'n) as Cnt15_01,	count('15.02'n) as Cnt15_02,	count('15.03'n) as Cnt15_03,	count('15.04'n) as Cnt15_04,	count('15.05'n) as Cnt15_05,	count('15.06'n) as Cnt15_06,	count('15.07'n) as Cnt15_07,	count('15.08'n) as Cnt15_08,	count('15.09'n) as Cnt15_09,	count('15.1'n) as Cnt15_1,	count('15.11'n) as Cnt15_11,	count('15.12'n) as Cnt15_12,	count('15.13'n) as Cnt15_13,	count('15.14'n) as Cnt15_14,	count('15.15'n) as Cnt15_15,	count('15.16'n) as Cnt15_16,	count('15.17'n) as Cnt15_17,	count('15.18'n) as Cnt15_18,	count('15.19'n) as Cnt15_19,	count('15.2'n) as Cnt15_2,	count('15.21'n) as Cnt15_21,	count('15.22'n) as Cnt15_22,	count('15.23'n) as Cnt15_23,	count('16.01'n) as Cnt16_01,	count('16.02'n) as Cnt16_02,	count('16.03'n) as Cnt16_03,	count('16.04'n) as Cnt16_04,	count('16.05'n) as Cnt16_05,	count('16.06'n) as Cnt16_06,	count('16.07'n) as Cnt16_07,	count('16.08'n) as Cnt16_08,	count('16.09'n) as Cnt16_09,	count('16.1'n) as Cnt16_1,	count('16.11'n) as Cnt16_11,	count('16.12'n) as Cnt16_12,	count('16.13'n) as Cnt16_13,	count('16.14'n) as Cnt16_14,	count('16.15'n) as Cnt16_15,	count('16.16'n) as Cnt16_16,	count('16.18'n) as Cnt16_18,	count('16.19'n) as Cnt16_19,	count('16.2'n) as Cnt16_2,	count('16.21'n) as Cnt16_21,	count('16.22'n) as Cnt16_22,	count('16.23'n) as Cnt16_23,	count('16.25'n) as Cnt16_25,	count('16.26'n) as Cnt16_26,	count('16.27'n) as Cnt16_27,	count('16.28'n) as Cnt16_28,	count('16.29'n) as Cnt16_29,	count('17.01'n) as Cnt17_01,	count('17.02'n) as Cnt17_02,	count('17.03'n) as Cnt17_03,	count('17.04'n) as Cnt17_04,	count('17.05'n) as Cnt17_05,	count('17.06'n) as Cnt17_06,	count('17.07'n) as Cnt17_07,	count('17.08'n) as Cnt17_08,	count('17.09'n) as Cnt17_09,	count('17.1'n) as Cnt17_1,	count('18.01'n) as Cnt18_01,	count('18.02'n) as Cnt18_02,	count('18.03'n) as Cnt18_03,	count('18.04'n) as Cnt18_04,	count('18.05'n) as Cnt18_05,	count('18.06'n) as Cnt18_06,	count('18.07'n) as Cnt18_07,	count('18.08'n) as Cnt18_08,	count('18.09'n) as Cnt18_09,	count('18.1'n) as Cnt18_1,	count('18.11'n) as Cnt18_11,	count('18.12'n) as Cnt18_12,	count('18.13'n) as Cnt18_13,	count('18.14'n) as Cnt18_14,	count('18.15'n) as Cnt18_15,	count('18.16'n) as Cnt18_16,	count('19.01'n) as Cnt19_01,	count('19.02'n) as Cnt19_02,	count('19.03'n) as Cnt19_03,	count('19.04'n) as Cnt19_04,	count('19.05'n) as Cnt19_05,	count('19.06'n) as Cnt19_06,	count('19.07'n) as Cnt19_07,	count('19.08'n) as Cnt19_08,	count('19.09'n) as Cnt19_09,	count('19.1'n) as Cnt19_1,	count('19.11'n) as Cnt19_11,	count('19.12'n) as Cnt19_12,	count('19.13'n) as Cnt19_13,	count('19.14'n) as Cnt19_14,	count('19.15'n) as Cnt19_15,	count('19.16'n) as Cnt19_16,	count('19.17'n) as Cnt19_17,	count('19.18'n) as Cnt19_18,	count('19.19'n) as Cnt19_19,	count('19.2'n) as Cnt19_2,	count('19.22'n) as Cnt19_22,	count('19.23'n) as Cnt19_23,	count('19.24'n) as Cnt19_24,	count('19.25'n) as Cnt19_25,	count('19.26'n) as Cnt19_26,	count('19.27'n) as Cnt19_27,	count('19.28'n) as Cnt19_28,	count('19.29'n) as Cnt19_29,	count('19.3'n) as Cnt19_3,	count('19.31'n) as Cnt19_31,	count('19.32'n) as Cnt19_32,	count('19.33'n) as Cnt19_33,	count('20.01'n) as Cnt20_01,	count('20.02'n) as Cnt20_02,	count('21.01'n) as Cnt21_01,	count('22.01'n) as Cnt22_01,	count('22.02'n) as Cnt22_02,	count('23.01'n) as Cnt23_01,	count('24.01'n) as Cnt24_01,	count('25.01'n) as Cnt25_01,	count('25.02'n) as Cnt25_02;
+
+proc sql;
+/*HL*/
+Create table _1 as
+select '住宅ローン' as A, '申込金額_未実行' as B,flg_amt as C, count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where flg_amt not in('01_5000万円未満','') and Flg_S='取下済(承認後)' group by flg_amt;
+
+Create table _2 as
+select '住宅ローン' as A, '申込人年収_未実' as B,flg_nenshu as C, count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where flg_nenshu not in('01_800万円未満','') and Flg_S='取下済(承認後)' group by flg_nenshu;
+
+Create table _3 as
+select '住宅ローン' as A, '借入金額_実行済' as B,flg_amt as C, count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where flg_amt not in('01_5000万円未満','') and Flg_S='実行済' group by flg_amt;
+
+Create table _4 as
+select '住宅ローン' as A, '借入年収_実行済' as B,flg_nenshu as C, count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where flg_nenshu not in('01_800万円未満','') and Flg_S='実行済' group by flg_nenshu;
+
+Create table _5 as
+select '住宅ローン' as A, '一部繰上返済合計_残無' as B,flg_prepay as C, count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where flg_prepay not in('01_10万円未満','') and SUM_of_bal=0 group by flg_prepay;
+
+Create table _6 as
+select'住宅ローン' as A, '一部繰上返済合計_残有' as B,flg_prepay as C, count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where flg_prepay not in('01_10万円未満','') and SUM_of_bal>0 group by flg_prepay;
+
+/*AUM*/
+Create table _7 as
+select '預金残高' as A, '月末残高' as B,AUM_Flag as C, count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where AUM_Flag not in('1:月末平残_1000万未満','') group by AUM_Flag;
+
+Create table _8 as
+select '預金残高' as A, '月中平残' as B,AUM_Avg_Flag as C, count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where AUM_Avg_Flag not in('1:月中平残_1000万未満','') group by AUM_Avg_Flag;
+
+/**/
+create table _9 as
+select '属性' as A, '顧客ポテンシャル高' as B,'R顧客_201606' as C,sum(R顧客_201606) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where R顧客_201606=1;
+
+/* 年収 */
+create table _10 as
+select '年収' as A, '高額年収職業' as B,職業 as C, count(職業) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where 職業 not in('') group by 職業;
+
+create table _11 as
+select '年収' as A, '高額世帯年収' as B,世帯年収 as C, count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where 世帯年収 not in('') group by 世帯年収;
+
+create table _12 as
+select '年収' as A, '高額個人年収' as B,個人年収 as C, count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where 個人年収 not in('') group by 個人年収;
+
+/* 国内入出金 */
+create table _13 as
+select  '国内入出金' as A, '振込金額月次平均_給与' as B,Avg_Salary as C, count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where Avg_Salary not in('1:給与振込_100万未満','') group by Avg_Salary;
+
+create table _14 as
+select  '国内入出金' as A, '振込金額月次平均_給与以外' as B,Avg_IB_Other as C, count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where Avg_IB_Other not in('1:給与以外振込_100万未満','') group by Avg_IB_Other;
+
+create table _15 as
+select  '国内入出金' as A, '出金金額月次平均' as B,Avg_OB as C, count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where Avg_OB not in('1:出金_100万未満','') group by Avg_OB;
+
+create table _16 as
+select  '国内入出金' as A, '口座引落金額月次平均' as B,Avg_DD as C, count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where Avg_DD not in('1:口座引落_100万未満','') group by Avg_DD;
+
+/* 海外送金 */
+create table _17 as
+select '海外送金' as A, '月次入金金額平均' as B,Intl_Remit_IB as C, count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where Intl_Remit_IB not in('') group by Intl_Remit_IB;
+
+create table _18 as
+select '海外送金' as A, '月次出金金額平均' as B,Intl_Remit_OB as C, count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where Intl_Remit_OB not in('') group by Intl_Remit_OB;
+
+/*Card*/
+create table _19 as
+select 'カード利用' as A, '月次カード利用金額平均' as B,Ave_Card_PMT as C, count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where Ave_Card_PMT not in('1:引落金額_50万未満','') group by Ave_Card_PMT;
+
+create table _20 as
+select 'カード利用' as A, '月次カード利用枚数平均' as B,Ave_Card_Use as C, count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where Ave_Card_Use not in('') group by Ave_Card_Use;
+
+/* 円定期セットまたは資産運用 */
+create table _21 as
+select '円定期セットまたは資産運用' as A, '円定期セットまたは資産運用' as B,JPY_Teiki_Rng as C, count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where JPY_Teiki_Rng not in('') group by JPY_Teiki_Rng;
+
+/* CP定期または施策系円定期 */
+create table _22 as
+select 'CP定期または施策系円定期' as A, 'CP定期または施策系円定期' as B,Other_Teiki_Rng as C, count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where Other_Teiki_Rng not in('') group by Other_Teiki_Rng;
+
+/* 外貨取引 */
+create table _23 as
+select '外貨取引 ' as A, '外貨取引' as B,FX_Trx as C, count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where FX_Trx not in('') group by FX_Trx;
+
+/* 投資信託 */
+create table _24 as
+select '投資信託' as A, '投資信託' as B,INV_Trx as C, count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where INV_Trx not in('') group by INV_Trx;
+
+/* 仕組債 */
+create table _25 as
+select '仕組債' as A, '仕組債' as B,SB_Trx as C, count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where SB_Trx not in('') group by SB_Trx;
+
+/* 海外ATM利用 */
+create table _26 as
+select '海外ATM利用' as A, '海外ATM利用' as B,Intl_ATM_Flag as C, count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where Intl_ATM_Flag not in('') group by Intl_ATM_Flag;
+
+/* 住宅ローン借入 */
+create table _27 as
+select '住宅ローン借入' as A, '住宅ローン借入' as B,HL借入 as C, count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where HL借入=1 group by HL借入;
+
+/* 海外送金 */
+create table _28 as
+select '海外送金' as A, '海外送金' as B,IntlRemit_Trx as C, count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where IntlRemit_Trx not in('') group by IntlRemit_Trx;
+
+/* 過去ｷﾞﾌﾄ券CP */
+create table _29 as
+select '過去ｷﾞﾌﾄ券CP' as A, '過去ｷﾞﾌﾄ券CP' as B,過去ｷﾞﾌﾄ券CP as C, count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where 過去ｷﾞﾌﾄ券CP=1 group by 過去ｷﾞﾌﾄ券CP;
+
+/* ボーナスCP */
+create table _30 as
+select 'ボーナスCP' as A, 'ボーナスCP' as B,ボーナスCP as C, count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where ボーナスCP=1 group by ボーナスCP;
+
+/* TPOINT */
+create table _31 as
+select 'TPOINT利用' as A, 'TPOINT利用' as B, TPOINT as C,count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey,&survey
+from &ds where TPOINT=1 group by TPOINT;
+quit;
+
+
+/** PATTERN II SUBTOTALS**/
+
+proc sql;
+/*HL*/
+Create table _1 as
+select '住宅ローン' as A, '申込金額_未実行' as B, count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where flg_amt not in('01_5000万円未満','') and Flg_S='取下済(承認後)';
+
+Create table _2 as
+select '住宅ローン' as A, '申込人年収_未実' as B, count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where flg_nenshu not in('01_800万円未満','') and Flg_S='取下済(承認後)';
+
+Create table _3 as
+select '住宅ローン' as A, '借入金額_実行済' as B, count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where flg_amt not in('01_5000万円未満','') and Flg_S='実行済';
+
+Create table _4 as
+select '住宅ローン' as A, '借入年収__実行済'  as B, count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where flg_nenshu not in('01_800万円未満','') and Flg_S='実行済';
+
+Create table _5 as
+select '住宅ローン' as A, '一部繰上返済合計_残無' as B, count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where flg_prepay not in('01_10万円未満','') and SUM_of_bal=0;
+
+Create table _6 as
+select '住宅ローン' as A, '一部繰上返済合計_残有' as B, count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where flg_prepay not in('01_10万円未満','') and SUM_of_bal>0;
+
+/*預金残高*/
+Create table _7 as
+select '預金残高' as A, '月末残高' as B,count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where AUM_Flag not in('1:月末平残_1000万未満','');
+
+Create table _8 as
+select '預金残高' as A, '月中平残' as B,count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where AUM_Avg_Flag not in('1:月中平残_1000万未満','');
+
+/**/
+create table _9 as
+select '属性' as A, '顧客ポテンシャル高' as B,sum(R顧客_201606) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where R顧客_201606=1;
+
+/* 年収 */
+create table _10 as
+select '年収' as A, '高額年収職業' as B, count(職業) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where 職業 not in('');
+
+create table _11 as
+select '年収' as A, '高額世帯年収' as B, count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where 世帯年収 not in('');
+
+create table _12 as
+select '年収' as A, '高額個人年収' as B, count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where 個人年収 not in('');
+
+/* 国内入出金 */
+create table _13 as
+select  '国内入出金' as A, '振込金額月次平均_給与' as B, count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where Avg_Salary not in('1:給与振込_100万未満',''); 
+
+create table _14 as
+select  '国内入出金' as A, '振込金額月次平均_給与以外' as B, count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where Avg_IB_Other not in('1:給与以外振込_100万未満','');
+
+create table _15 as
+select  '国内入出金' as A, '出金金額月次平均' as B, count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where Avg_OB not in('1:出金_100万未満','');
+
+create table _16 as
+select  '国内入出金' as A, '口座引落金額月次平均' as B, count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where Avg_DD not in('1:口座引落_100万未満','');
+
+/* 海外送金 */
+create table _17 as
+select '海外送金' as A, '月次入金金額平均' as B, count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where Intl_Remit_IB not in('');
+
+create table _18 as
+select '海外送金' as A, '月次出金金額平均' as B, count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where Intl_Remit_OB not in('');
+
+/*Card*/
+create table _19 as
+select 'カード利用' as A, '月次カード利用金額平均' as B, count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where Ave_Card_PMT not in('1:引落金額_50万未満','');
+
+create table _20 as
+select 'カード利用' as A, '月次カード利用枚数平均' as B, count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where Ave_Card_Use not in('');
+
+/* 円定期セットまたは資産運用 */
+create table _21 as
+select '円定期セットまたは資産運用' as A, '円定期セットまたは資産運用' as B, count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where JPY_Teiki_Rng not in('');
+
+/* CP定期または施策系円定期 */
+create table _22 as
+select 'CP定期または施策系円定期' as A, 'CP定期または施策系円定期' as B, count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where Other_Teiki_Rng not in('');
+
+/* 外貨取引 */
+create table _23 as
+select '外貨取引 ' as A, '外貨取引' as B, count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where FX_Trx not in('');
+
+/* 投資信託 */
+create table _24 as
+select '投資信託' as A, '投資信託' as B, count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where INV_Trx not in('');
+
+/* 仕組債 */
+create table _25 as
+select '仕組債' as A, '仕組債' as B, count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where SB_Trx not in('');
+
+/* 海外ATM利用 */
+create table _26 as
+select '海外ATM利用' as A, '海外ATM利用' as B, count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where Intl_ATM_Flag not in('');
+
+/* 住宅ローン借入 */
+create table _27 as
+select '住宅ローン借入' as A, '住宅ローン借入' as B, count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where HL借入=1;
+
+/* 海外送金 */
+create table _28 as
+select '海外送金' as A, '海外送金' as B, count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where IntlRemit_Trx not in('');
+
+/* 過去ｷﾞﾌﾄ券CP */
+create table _29 as
+select '過去ｷﾞﾌﾄ券CP' as A, '過去ｷﾞﾌﾄ券CP' as B, count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where 過去ｷﾞﾌﾄ券CP=1;
+
+/* ボーナスCP */
+create table _30 as
+select 'ボーナスCP' as A, 'ボーナスCP' as B, count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where ボーナスCP=1;
+
+/* TPOINT */
+create table _31 as
+select 'TPOINT利用' as A, 'TPOINT利用' as B, count(gcif) as 顧客数,sum(Survey) as Srvy_Cnt,&survey
+from &ds where TPOINT=1 group by TPOINT;
+
+quit;
+
+
+
+%let s_cut =1 ;  
+%let e_cut =31 ;
+
+%let Survey1=Cnt3_01 num,	Cnt3_02 num,	Cnt3_03 num,	Cnt3_04 num,	Cnt3_05 num,	Cnt3_06 num,	Cnt3_07 num,	Cnt3_08 num,	Cnt3_09 num,	Cnt3_1 num,	Cnt3_11 num,	Cnt3_12 num,	Cnt3_13 num,	Cnt3_14 num,	Cnt3_15 num,	Cnt3_16 num,	Cnt3_17 num,	Cnt3_18 num,	Cnt3_19 num,	Cnt4_01 num,	Cnt5_01 num,	Cnt5_02 num,	Cnt6_01 num,	Cnt7_01 num,	Cnt8_01 num,	Cnt8_02 num,	Cnt9_01 num,	Cnt9_02 num,	Cnt9_03 num,	Cnt9_04 num,	Cnt9_05 num,	Cnt9_06 num,	Cnt9_07 num,	Cnt9_08 num,	Cnt9_09 num,	Cnt9_1 num,	Cnt9_11 num,	Cnt9_12 num,	Cnt10_01 num,	Cnt10_02 num,	Cnt10_03 num,	Cnt10_04 num,	Cnt10_05 num,	Cnt10_06 num,	Cnt10_07 num,	Cnt10_08 num,	Cnt10_09 num,	Cnt10_1 num,	Cnt10_11 num,	Cnt10_12 num,	Cnt10_13 num,	Cnt10_14 num,	Cnt10_15 num,	Cnt11_01 num,	Cnt11_02 num,	Cnt11_03 num,	Cnt11_04 num,	Cnt11_05 num,	Cnt11_06 num,	Cnt11_07 num,	Cnt11_08 num,	Cnt11_09 num,	Cnt11_1 num,	Cnt11_11 num,	Cnt12_01 num,	Cnt12_02 num,	Cnt12_03 num,	Cnt12_04 num,	Cnt12_05 num,	Cnt12_06 num,	Cnt12_07 num,	Cnt12_08 num,	Cnt12_09 num,	Cnt12_1 num,	Cnt12_11 num,	Cnt12_12 num,	Cnt12_13 num,	Cnt12_14 num,	Cnt12_15 num,	Cnt12_16 num,	Cnt12_17 num,	Cnt12_18 num,	Cnt13_01 num,	Cnt14_01 num,	Cnt14_02 num,	Cnt14_03 num,	Cnt14_04 num,	Cnt14_05 num,	Cnt14_06 num,	Cnt14_07 num,	Cnt14_08 num,	Cnt14_09 num,	Cnt14_1 num,	Cnt14_11 num,	Cnt14_12 num,	Cnt14_13 num,	Cnt14_14 num,	Cnt14_15 num,	Cnt14_16 num,	Cnt14_17 num,	Cnt15_01 num,	Cnt15_02 num,	Cnt15_03 num,	Cnt15_04 num,	Cnt15_05 num,	Cnt15_06 num,	Cnt15_07 num,	Cnt15_08 num,	Cnt15_09 num,	Cnt15_1 num,	Cnt15_11 num,	Cnt15_12 num,	Cnt15_13 num,	Cnt15_14 num,	Cnt15_15 num,	Cnt15_16 num,	Cnt15_17 num,	Cnt15_18 num,	Cnt15_19 num,	Cnt15_2 num,	Cnt15_21 num,	Cnt15_22 num,	Cnt15_23 num,	Cnt16_01 num,	Cnt16_02 num,	Cnt16_03 num,	Cnt16_04 num,	Cnt16_05 num,	Cnt16_06 num,	Cnt16_07 num,	Cnt16_08 num,	Cnt16_09 num,	Cnt16_1 num,	Cnt16_11 num,	Cnt16_12 num,	Cnt16_13 num,	Cnt16_14 num,	Cnt16_15 num,	Cnt16_16 num,	Cnt16_18 num,	Cnt16_19 num,	Cnt16_2 num,	Cnt16_21 num,	Cnt16_22 num,	Cnt16_23 num,	Cnt16_25 num,	Cnt16_26 num,	Cnt16_27 num,	Cnt16_28 num,	Cnt16_29 num,	Cnt17_01 num,	Cnt17_02 num,	Cnt17_03 num,	Cnt17_04 num,	Cnt17_05 num,	Cnt17_06 num,	Cnt17_07 num,	Cnt17_08 num,	Cnt17_09 num,	Cnt17_1 num,	Cnt18_01 num,	Cnt18_02 num,	Cnt18_03 num,	Cnt18_04 num,	Cnt18_05 num,	Cnt18_06 num,	Cnt18_07 num,	Cnt18_08 num,	Cnt18_09 num,	Cnt18_1 num,	Cnt18_11 num,	Cnt18_12 num,	Cnt18_13 num,	Cnt18_14 num,	Cnt18_15 num,	Cnt18_16 num,	Cnt19_01 num,	Cnt19_02 num,	Cnt19_03 num,	Cnt19_04 num,	Cnt19_05 num,	Cnt19_06 num,	Cnt19_07 num,	Cnt19_08 num,	Cnt19_09 num,	Cnt19_1 num,	Cnt19_11 num,	Cnt19_12 num,	Cnt19_13 num,	Cnt19_14 num,	Cnt19_15 num,	Cnt19_16 num,	Cnt19_17 num,	Cnt19_18 num,	Cnt19_19 num,	Cnt19_2 num,	Cnt19_22 num,	Cnt19_23 num,	Cnt19_24 num,	Cnt19_25 num,	Cnt19_26 num,	Cnt19_27 num,	Cnt19_28 num,	Cnt19_29 num,	Cnt19_3 num,	Cnt19_31 num,	Cnt19_32 num,	Cnt19_33 num,	Cnt20_01 num,	Cnt20_02 num,	Cnt21_01 num,	Cnt22_01 num,	Cnt22_02 num,	Cnt23_01 num,	Cnt24_01 num,	Cnt25_01 num,	Cnt25_02 num;
+
+%macro Matome;
+%do i=&s_cut %to &e_cut;
+
+	%if &i=1 %then %do;
+		
+		proc sql;
+		create table LC_Target_sum
+			(A varchar(25), B varchar(30), C varchar(40), 顧客数 num, Srvy_Cnt num,&survey1);
+		quit;
+
+		proc append base=LC_Target_Sum data=_&i force;
+		run;
+
+	%end;
+
+	%else %do;
+
+		proc append base=LC_Target_Sum data=_&i force;
+		run;
+
+	%end;
+
+%end;
+
+%mend Matome;
+
+%Matome
+
+
+%macro Matome1;
+%do i=&s_cut %to &e_cut;
+
+	%if &i=1 %then %do;
+		
+		proc sql;
+		create table LC_Target_sum_all
+			(A varchar(25), B varchar(30),顧客数 num, Srvy_Cnt num,&survey1);
+		quit;
+
+		proc append base=LC_Target_Sum_all data=_&i force;
+		run;
+
+	%end;
+
+	%else %do;
+
+		proc append base=LC_Target_Sum_all data=_&i force;
+		run;
+
+	%end;
+
+%end;
+
+%mend Matome1;
+
+%Matome1
+
+
+%do z=&s_cut %to &e_cut;
+	proc sql;
+	drop table _&z;
+	quit;
+%end;
+
+
+/************/
+
+
+/*Survey*/
+options compress=char;
+filename Survey "\\ssosn1527\sas$\個人部門\リテール営業統轄部\input\個人\225273_Peter_Kirsch";
+libname Luxcard "\\ssosn1527\sas$\個人部門\リテール営業統轄部\output\個人\225273_Peter_Kirsch\LuxCard";
+
+/******  SURVEY DATA  *******/
+data Survey_data1 (drop=Synergy_ID ＰＣメールアドレス パラメータ番号 Synergy_ID1 個人情報同意 END);
+infile survey(export_sjis_20160908105117.csv)	delimiter = ',' missover dsd lrecl=10000 firstobs=2;
+input
+Synergy_ID :$10.
+ＰＣメールアドレス :$45.
+パラメータ番号 :$66.
+Synergy_ID :$10.
+PID :$10.
+_2_ :$45.
+_3_01 :$30.
+_3_02 :$40.
+_3_03 :$40.
+_3_04 :$40.
+_3_05 :$50.
+_3_06 :$40.
+_3_07 :$40.
+_3_08 :$60.
+_3_09 :$40.
+_3_10 :$40.
+_3_11 :$30.
+_3_12 :$30.
+_3_13 :$20.
+_3_14 :$20.
+_3_15 :$40.
+_3_16 :$30.
+_3_17 :$50.
+_3_18 :$170.
+_3_19 :$40.
+_4_01 :$40.
+_5_01 :$60.
+_5_02 :$60.
+_6_01 :$50.
+_6_02 :$10.
+_7_01 :$40.
+_8_01 :$80.
+_8_02 :$130.
+_9_01 :$20.
+_9_02 :$20.
+_9_03 :$20.
+_9_04 :$30.
+_9_05 :$30.
+_9_06 :$30.
+_9_07 :$40.
+_9_08 :$10.
+_9_09 :$10.
+_9_10 :$50.
+_9_11 :$100.
+_9_12 :$40.
+_10_01 :$40.
+_10_02 :$10.
+_10_03 :$40.
+_10_04 :$50.
+_10_05 :$40.
+_10_06 :$40.
+_10_07 :$30.
+_10_08 :$30.
+_10_09 :$20.
+_10_10 :$10.
+_10_11 :$20.
+_10_12 :$20.
+_10_13 :$50.
+_10_14 :$60.
+_10_15 :$40.
+_11_01 :$30.
+_11_02 :$70.
+_11_03 :$30.
+_11_04 :$30.
+_11_05 :$60.
+_11_06 :$40.
+_11_07 :$60.
+_11_08 :$20.
+_11_09 :$50.
+_11_10 :$80.
+_11_11 :$40.
+_12_01 :$40.
+_12_02 :$30.
+_12_03 :$40.
+_12_04 :$20.
+_12_05 :$20.
+_12_06 :$40.
+_12_07 :$20.
+_12_08 :$20.
+_12_09 :$20.
+_12_10 :$50.
+_12_11 :$30.
+_12_12 :$40.
+_12_13 :$30.
+_12_14 :$40.
+_12_15 :$40.
+_12_16 :$60.
+_12_17 :$70.
+_12_18 :$40.
+_13_01 :$40.
+_14_01 :$40.
+_14_02 :$30.
+_14_03 :$50.
+_14_04 :$60.
+_14_05 :$20.
+_14_06 :$20.
+_14_07 :$60.
+_14_08 :$30.
+_14_09 :$20.
+_14_10 :$40.
+_14_11 :$30.
+_14_12 :$30.
+_14_13 :$50.
+_14_14 :$40.
+_14_15 :$40.
+_14_16 :$50.
+_14_17 :$220.
+_14_18 :$10.
+_15_01 :$50.
+_15_02 :$30.
+_15_03 :$40.
+_15_04 :$30.
+_15_05 :$20.
+_15_06 :$30.
+_15_07 :$30.
+_15_08 :$50.
+_15_09 :$30.
+_15_10 :$30.
+_15_11 :$10.
+_15_12 :$60.
+_15_13 :$30.
+_15_14 :$50.
+_15_15 :$30.
+_15_16 :$30.
+_15_17 :$30.
+_15_18 :$30.
+_15_19 :$40.
+_15_20 :$70.
+_15_21 :$50.
+_15_22 :$80.
+_15_23 :$30.
+_16_01 :$10.
+_16_02 :$10.
+_16_03 :$10.
+_16_04 :$10.
+_16_05 :$10.
+_16_06 :$10.
+_16_07 :$10.
+_16_08 :$10.
+_16_09 :$60.
+_16_10 :$30.
+_16_11 :$40.
+_16_12 :$30.
+_16_13 :$30.
+_16_14 :$10.
+_16_15 :$40.
+_16_16 :$30.
+_16_17 :$10.
+_16_18 :$40.
+_16_19 :$40.
+_16_20 :$50.
+_16_21 :$30.
+_16_22 :$30.
+_16_23 :$50.
+_16_24 :$10.
+_16_25 :$50.
+_16_26 :$30.
+_16_27 :$60.
+_16_28 :$30.
+_16_29 :$20.
+_17_01 :$10.
+_17_02 :$20.
+_17_03 :$10.
+_17_04 :$20.
+_17_05 :$20.
+_17_06 :$10.
+_17_07 :$10.
+_17_08 :$50.
+_17_09 :$40.
+_17_10 :$20.
+_18_01 :$20.
+_18_02 :$20.
+_18_03 :$20.
+_18_04 :$20.
+_18_05 :$10.
+_18_06 :$30.
+_18_07 :$10.
+_18_08 :$20.
+_18_09 :$20.
+_18_10 :$30.
+_18_11 :$20.
+_18_12 :$40.
+_18_13 :$10.
+_18_14 :$20.
+_18_15 :$50.
+_18_16 :$100.
+_19_01 :$20.
+_19_02 :$30.
+_19_03 :$10.
+_19_04 :$20.
+_19_05 :$20.
+_19_06 :$20.
+_19_07 :$20.
+_19_08 :$20.
+_19_09 :$10.
+_19_10 :$20.
+_19_11 :$20.
+_19_12 :$10.
+_19_13 :$40.
+_19_14 :$20.
+_19_15 :$20.
+_19_16 :$40.
+_19_17 :$10.
+_19_18 :$20.
+_19_19 :$40.
+_19_20 :$30.
+_19_21 :$10.
+_19_22 :$20.
+_19_23 :$30.
+_19_24 :$20.
+_19_25 :$40.
+_19_26 :$20.
+_19_27 :$30.
+_19_28 :$30.
+_19_29 :$20.
+_19_30 :$10.
+_19_31 :$30.
+_19_32 :$50.
+_19_33 :$80.
+_20_01 :$20.
+_20_02 :$10.
+_21_01 :$10.
+_22_01 :$50.
+_22_02 :$50.
+_23_01 :$30.
+_24_01 :$40.
+_25_01 :$50.
+_25_02 :$40.
+個人情報同意 :$10.
+END :$5.;
+run;
+
+proc sql;
+create table Survey_data2 as
+select gcif,t1.pid,*,1 as Survey
+from survey_data1 as t1 left join raw.GCIF_PID(keep=GCIF PID) as t2 on t1.PID=t2.PID
+order by gcif,t1.pid;
+quit;
+
+data  Survey_data3; /* アンケートへの複数入力件数を除外。（31件）*/
+set  Survey_data2;
+by gcif pid;
+
+if first.pid;
+run;
+
+
+proc sort data= SURVEY_DATA3 out= Survey_data4;by gcif pid;run;
+proc transpose data=Survey_data4 out=Survey_data4(drop=col2 col3 col4 rename=(_Name_=_Qchar_));
+var _2_ -- _25_02;
+by gcif PID;
+run;
+
+proc sql;
+create table Survey_data5 as
+select gcif,pid, substr(_Qchar_,2,find(_Qchar_,"_",2)-2) as _Qchar1_, 
+		input(catx('.',substr(_Qchar_,2,find(_Qchar_,"_",2)-2),substr(_Qchar_,find(_Qchar_,"_",2)+1)),5.2) as _Qnum_,_Qchar_,col1
+from Survey_data4
+where not missing(col1)
+order by gcif,pid ,_QNum_ asc,col1;
+run;
+
+/*check*/
+data test;
+set Survey_data5;
+check=substr(_Qchar_,2,find(_Qchar_,"_",2)-2);
+check1=substr(_Qchar_,find(_Qchar_,"_",2)+1);
+check2=input(catx('.',check,check1),5.2);
+run;
+/**/
+
+proc transpose data=Survey_data5 out=Survey_data6(drop=_name_);
+var col1;
+id _QNum_;
+by gcif PID;
+run;
+
+
+/** REORDER ALL VARIABLES **/
+proc sql noprint;
+select count(distinct _QNum_) format 3. INTO :obs
+from Survey_data5
+order by _QNum_ asc;quit;
+%put &obs;
+
+proc sql noprint;
+select distinct _QNum_ INTO :Q1 - :Q999
+from Survey_data5
+order by _QNum_ asc;quit;
+
+%macro Qs ; /*CHECK output to log all q&i macvar*/
+	%do i= 1 %to &obs;
+		%put q&i = &&q&i;
+	%end ;
+%mend Qs;
+
+%Qs
+
+%Macro Col_order;
+%global Col_str;
+
+	%do i=1 %to &obs;
+
+		%if &i=1 %then %do;
+			%let Col_str="&&q&i"n;
+		%end;
+
+		%else %do;
+			%let Col_str=&Col_str,"&&q&i"n;
+		%end;
+
+	%end;
+
+%mend Col_order;
+
+%Col_order
+
+%put &col_Str;
+
+proc sql nowarnrecurs;
+create table Survey_data6 as
+select gcif,pid,1 as Survey,&col_Str
+from Survey_data6;
+quit;
+
+/*OGAWA SEGMENTATION WIP*/
+data test; 
+set Survey_data6;
+run;
+/********/
+
+/** MERGE WITH LC TARGET DATA **/
+data LC_Target_Survey;
+merge lc_target_data(in=t1)
+	  Survey_data6(in=t2 drop=pid where=(not missing(GCIF)));
+by gcif;
+if t1;
+run;
+
+
+data luxcard.LC_Target_Survey;
+set  LC_Target_Survey;
+run;
+
+
+data luxcard.SURVEY_DATA5;
+set  SURVEY_DATA5;
+run;
+data luxcard.SURVEY_DATA6;
+set  SURVEY_DATA6;
+run;
+
+
+
+
+
+
+
+/*EDA*/
+proc sql;
+create table test as
+select count(gcif) as g_cnt,count(distinct gcif) as uni_g,count(PID) as P_cnt,count(distinct pid) as Uni_p
+from survey_data2
+where not missing(gcif);
+quit;
+
+/* DOULBE ENTRY CHECK */
+proc sql;
+create table test as
+select t1.gcif,t1.pid,Uni_p,*
+from survey_data2 as t1 left join (select gcif,pid,count(pid) as Uni_p
+									from survey_data2
+									group by gcif,pid) as t2 on t1.pid=t2.pid
+where uni_p>1
+order by t1.gcif,t1.pid;
+quit;
+
+proc sql;
+create table test2 as
+select count(gcif) as g_cnt,count(distinct gcif) as uni_g,count(PID) as P_cnt,count(distinct pid) as Uni_
+from test;
+quit;
+/**/
+
+/** METADATA **/
+proc sql;
+create table Survey_Cols as
+select memname,name,type,format,informat,label
+from dictionary.columns
+where libname='WORK'  and memname='SURVEY_DATA2';quit;
+quit;
+
+
+
+proc sort;by col2;run;
+
+proc sql;
+create table test as
+select gcif,pid,count(pid) as Uni_p
+from survey_data2
+group by gcif,pid;
+quit;
