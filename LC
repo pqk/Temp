@@ -1354,3 +1354,443 @@ select gcif,pid,count(pid) as Uni_p
 from survey_data2
 group by gcif,pid;
 quit;
+
+
+
+
+/* ft auto */
+
+/****** 給与振月  ******/
+
+/*** Initial Date ***/
+%let ST='1jan2011'd; 	/*--> s_cut=1*/
+       
+data _null_;		/*n= months elapsed from s_cut=1 to today() nはs_cut=1～本日の間の経過月数*/
+        call symput ("n",strip(intck("month",&ST-1,intnx('day',intnx('month',today(),0),-1)))) ;
+run;
+
+%put %nrstr(&n =) &n;/* Check */
+
+data _null_;	/*creates monthly macvar series from &ST to today()*/
+	%macro YM1;
+		%do i= 0 %to &n ;
+			call symput("yymm&i" ,put(intnx("month",&ST-1,%eval(&i),"end"),yymmdd4.));
+		%end;
+	%mend YM1;
+	%YM1 ;
+run;
+
+%macro YM2 ; /*output to log all yymm&i macvar*/
+	%do i= 0 %to &n ;
+		%put yymm&i = &&yymm&i;
+	%end ;
+%mend YM2;
+%YM2 ;
+
+
+%let s_cut =61 ;  	/*YYMM55 1507  YYMM61 1601 */
+%let e_cut =66 ;		/*YYMM66 1606  */
+%let as_of=66;
+
+%macro Salary_ETF;
+%do i=&s_cut %to &e_cut;
+
+	proc sql;
+	create table auto_pmt as
+	select GCIF,case
+		when index(PMT_CMP_JPN,'ｷﾕｳﾖ')>0 or index(PMT_CMP_JPN,'ｼﾖｳﾖ')>0 then Amt_txn_tcy end as AutoPay_AMT,
+		case
+		when  DRCR='C' and calculated AutoPay_AMT=. then Amt_txn_tcy end as AutoPayOTH_AMT,
+		sum(calculated AutoPayOTH_AMT) as AutoPayOTH_AMT,sum(calculated AutoPay_AMT) as AutoPay_AMT
+	from raw.AUTO_PMT_20&&yymm&i(where=(DRCR^='D')) as t1 left join raw.GCIF_PID(keep=GCIF PID) as t2 on t1.PID=t2.PID
+	where GCIF IN(select GCIF from raw.EB_20&&yymm&as_of)
+	group by gcif
+	order by GCIF;
+	quit;
+
+	proc sql;
+	create table FT_IB as
+	select GCIF,case
+		when flg_slry='1' then txn_amt end as FT_amt,
+		case
+		when flg_slry='0' then txn_amt end as FT_OTH_amt,
+		sum(calculated FT_OTH_amt) as FT_OTH_amt,sum(calculated FT_amt) as FT_amt
+	from raw.FT_IB_DET_20&&yymm&i as t1 left join raw.GCIF_PID(keep=GCIF PID) as t2 on t1.PID=t2.PID
+	where GCIF IN(select GCIF from raw.EB_20&&yymm&as_of)
+	group by gcif
+	order by GCIF;
+	quit;
+
+
+	data Salary_ETF_&&yymm&i;
+	merge auto_pmt
+		  FT_IB;
+	by GCIF;
+	TTL=sum(AutoPay_AMT,FT_Amt);
+	*TTL=sum(AutoPayOTH_AMT,FT_OTH_Amt);
+
+	format ttl comma20.;
+	YM=&&yymm&i;
+	run;
+
+%end;
+
+
+data Salary_ETF;
+set
+%do y =&s_cut %to &e_cut %by 1;
+
+	Salary_ETF_&&yymm&y
+	
+%end ;
+;
+run ;
+
+%do z=&s_cut %to &e_cut;
+	proc sql;
+	drop table Salary_ETF_&&yymm&z; /*macro*/
+	quit;
+%end;
+
+%mend Salary_ETF;
+
+
+%Salary_ETF
+
+proc sort data=salary_ETF out=a;by GCIF;run;
+
+data Salary_TTL/*(drop=i cnt AutoPay_AMT FT_AMT ttl YM)*/; /*SalaryOTH_TTL*/
+set a(keep=gcif ttl YM where=(not missing(TTL)));
+by gcif;
+
+if first.gcif then do;
+	cnt=0;
+	cum_ttl=0;
+	*AP_TTL=0;
+	*APO_TTL=0;
+	*FT_TTL=0;
+	*FTO_TTL=0;end;
+cnt+1;
+
+retain;
+cum_ttl=sum(cum_ttl,ttl);
+Ave_ttl=cum_ttl/cnt;
+
+*if last.gcif;
+
+if Ave_ttl>=0 and Ave_ttl<1000000 then '給与_1M<'n=1;
+	else '給与_1M<'n=0;
+if Ave_ttl>=1000000 and Ave_ttl<2999999 then '給与_1M>'n=1;
+	else '給与_1M>'n=0;
+if Ave_ttl>=3000000 and Ave_ttl<9999999 then '給与_3M>'n=1;
+	else '給与_3M>'n=0;
+if Ave_ttl>=10000000 then '給与_10M>'n=1;
+	else '給与_10M>'n=0;
+
+array salary{*} '給与_1M<'n -- '給与_10M>'n;
+do i=1 to dim(salary);
+	if salary(i)=0 and missing(Ave_ttl) then salary(i)=.;
+end;
+
+format cum_ttl comma20. Ave_ttl comma20.;
+run;
+
+data Salary_AP(drop=cnt AutoPay_AMT);
+set a(keep=gcif AutoPay_AMT where=(not missing(AutoPay_AMT)));
+by gcif;
+
+if first.gcif then do;
+	cnt=0;
+	AP_TTL=0;end;
+cnt+1;
+
+retain;
+AP_TTL=sum(AP_TTL,AutoPay_AMT);
+Ave_AP_TTL=AP_TTL/cnt;
+
+if last.gcif;
+
+format AP_TTL comma20. Ave_AP_TTL comma20.;
+run;
+
+data Salary_AP_OTH(drop=cnt AutoPayOTH_AMT);
+set a(keep=gcif AutoPayOTH_AMT where=(not missing(AutoPayOTH_AMT)));
+by gcif;
+
+if first.gcif then do;
+	cnt=0;
+	AP_OTH_TTL=0;end;
+cnt+1;
+
+retain;
+AP_OTH_TTL=sum(AP_OTH_TTL,AutoPayOTH_AMT);
+Ave_AP_OTH_TTL=AP_OTH_TTL/cnt;
+
+if last.gcif;
+
+format AP_OTH_TTL comma20. Ave_AP_OTH_TTL comma20.;
+run;
+
+data Salary_FT/*(drop=cnt FT_AMT)*/;
+set a(keep=gcif YM FT_AMT where=(not missing(FT_AMT)));
+by gcif;
+
+if first.gcif then do;
+	cnt=0;
+	FT_TTL=0;end;
+cnt+1;
+
+retain;
+FT_TTL=sum(FT_TTL,FT_AMT);
+Ave_FT_TTL=FT_TTL/cnt;
+
+*if last.gcif;
+
+format FT_TTL comma20. Ave_FT_TTL comma20.;
+run;
+
+
+data Salary_FT_OTH(drop=cnt FT_OTH_AMT);
+set a(keep=gcif FT_OTH_AMT where=(not missing(FT_OTH_AMT)));
+by gcif;
+
+if first.gcif then do;
+	cnt=0;
+	FT_OTH_TTL=0;end;
+cnt+1;
+
+retain;
+FT_OTH_TTL=sum(FT_OTH_TTL,FT_OTH_AMT);
+Ave_FT_OTH_TTL=FT_OTH_TTL/cnt;
+
+if last.gcif;
+
+format FT_OTH_TTL comma20. Ave_FT_OTH_TTL comma20.;
+run;
+
+/*MERGE DATASETS*/
+
+data Method_Comp;
+merge Domestic_IB_OB(in=t1 keep=gcif PERI_INAMT_AVG_SAL PERI_INAMT_AVG_OTH)
+	  Salary_AP
+	  Salary_AP_OTH
+	  Salary_FT
+	  Salary_FT_OTH;
+by GCIF;
+if t1;
+
+IN_Delta=PERI_INAMT_AVG_SAL-Ave_FT_TTL;
+IN_OTH_Delta=PERI_INAMT_AVG_OTH-Ave_FT_OTH_TTL;
+
+if Ave_FT_TTL>0 and missing(PERI_INAMT_AVG_SAL) then IN_Delta=-Ave_FT_TTL;
+if Ave_FT_OTH_TTL>0 and missing(PERI_INAMT_AVG_OTH) then IN_OTH_Delta=-Ave_FT_OTH_TTL;
+
+
+format PERI_INAMT_AVG_SAL comma20. PERI_INAMT_AVG_OTH comma20. IN_Delta comma20. IN_OTH_Delta comma20. ;
+
+if missing(PERI_INAMT_AVG_SAL) and missing(PERI_INAMT_AVG_OTH) and missing(AP_TTL) and missing(Ave_AP_TTL) and missing(AP_OTH_TTL) and
+	missing(Ave_AP_OTH_TTL) and missing(FT_TTL) and missing(Ave_FT_TTL) and missing(FT_OTH_TTL) and missing(Ave_FT_OTH_TTL) then delete;
+
+run;
+
+/*Sample*/
+data Sample_Method_Comp(drop=obsleft gcif);
+sampleNum=10000;
+obsleft=obstotal;
+
+do while(sampleNum>0);
+	pick+1;
+	if ranuni(0)<sampleNum/obsleft then do;
+		set Method_Comp point=pick nobs=obstotal;
+		output;
+		sampleNum=sampleNum-1;
+		end;
+	obsleft=obsleft-1;
+end;
+stop;
+run;
+
+proc export data = Sample_Method_Comp
+OUTFILE= "\\ssosn1527\sas$\個人部門\リテール営業統轄部\output\個人\225273_Peter_Kirsch\Sample_Method_Comp.csv"
+dbms = csv replace ;
+run ;
+
+proc sort;by In_delta;run;
+
+proc sql;
+create table z as
+select sum('給与_1M<'n) as '給与_1M<'n,
+	   sum('給与_1M>'n) as '給与_1M>'n,
+		sum('給与_3M>'n) as '給与_3M>'n,
+		sum('給与_10M>'n) as '給与_10M>'n
+from SalaryOTH_TTL; /*SalaryOTH_TTL*/
+quit;
+
+/***********************/
+
+
+/*EDA*/
+/*auto pay*/
+proc sql;
+create table auto_pmtz as
+select GCIF,sum(Amt_txn_tcy) as AutoPay_AMT
+from raw.AUTO_PMT_201606 as t1 left join raw.GCIF_PID(keep=GCIF PID) as t2 on t1.PID=t2.PID
+where /*(PMT_CMP_JPN like '%ｷﾕｳﾖ%' or PMT_CMP_JPN like '%ｼﾖｳﾖ%')and*/ 
+GCIF IN(select GCIF from raw.EB_201606)
+group by gcif
+order by GCIF;
+quit;
+
+
+data zzz;
+set raw.AUTO_PMT_201606 ;
+if index(PMT_CMP_JPN,'ｷﾕｳﾖ')>0 or index(PMT_CMP_JPN,'ｼﾖｳﾖ')>0 then AutoPay_AMT=Amt_txn_tcy;
+else if DRCR='C' then AutoPayOTH_AMT=Amt_txn_tcy;
+else delete;
+run;
+
+
+proc sort;by AutoPay_AMT;run;
+
+proc sql;
+create table test as
+select *,case
+		when index(PMT_CMP_JPN,'ｷﾕｳﾖ')>0 or index(PMT_CMP_JPN,'ｼﾖｳﾖ')>0 then Amt_txn_tcy end as AutoPay_AMT,
+		case
+		when  DRCR='C' and calculated AutoPay_AMT=. then Amt_txn_tcy end as AutoPayOTH_AMT
+from raw.AUTO_PMT_201606
+having not missing(AutoPay_AMT) or not missing(AutoPayOTH_AMT)
+order by PID,dat_post_str,PMT_COMP,Amt_txn_tcy;
+quit;
+
+proc sort data=zzz;by PID dat_post_str pmt_Comp Amt_txn_tcy;run;
+proc compare base=zzz compare=test;run;
+
+proc sort data=salary out=zz;by ttl;run;
+
+
+
+proc sql;
+create table test as
+select PID,case
+		when index(PMT_CMP_JPN,'ｷﾕｳﾖ')>0 or index(PMT_CMP_JPN,'ｼﾖｳﾖ')>0 then Amt_txn_tcy end as AutoPay_AMT,
+		case
+		when  DRCR='C' and calculated AutoPay_AMT=. then Amt_txn_tcy end as AutoPayOTH_AMT,
+		sum(calculated AutoPay_AMT) as AutoPay_AMT,sum(calculated AutoPayOTH_AMT) as AutoPayOTH_AMT
+from raw.AUTO_PMT_201606(where=(DRCR^='D'))
+/*having not missing(AutoPay_AMT) or not missing(AutoPayOTH_AMT)*/
+order by PID,dat_post_str,PMT_COMP,Amt_txn_tcy;
+quit;
+
+/****TEST: Will autopay always be 'C'?*/
+
+%let s_cut =37 ; 
+%let e_cut =115 ;
+
+%macro test;
+%do i=&s_cut %to &e_cut;
+
+	data _1_&&yymm&i;
+	set raw.AUTO_PMT_20&&yymm&i;
+	if index(PMT_CMP_JPN,'ｷﾕｳﾖ')>0 or index(PMT_CMP_JPN,'ｼﾖｳﾖ')>0 then AutoPay_AMT=Amt_txn_tcy;
+	else if DRCR='C' then AutoPayOTH_AMT=Amt_txn_tcy;
+	*else delete;
+	YM=&&yymm&i;
+	run;
+
+%end;
+
+data all;
+set
+%do y =&s_cut %to &e_cut %by 1;
+
+	_1_&&yymm&y
+	
+%end ;
+;
+run ;
+
+%do z=&s_cut %to &e_cut;
+	proc sql;
+	drop table _1_&&yymm&z; /*macro*/
+	quit;
+%end;
+
+%mend;
+
+%test
+
+proc freq;
+tables YM*DRCR / norow nocol nopercent nocum;
+where not missing(AutoPay_AMT);
+run; /****>>>RESULT: autopay will always only be 'C'*/
+
+/*FT*/
+data FT_IB_DET_201606;
+set raw.FT_IB_DET_201606;
+run;
+
+proc sql;
+create table test as
+select distinct txn_type, flg_slry
+from FT_IB_DET_201606;
+quit;
+
+proc sql;
+create table FT_IBz as
+select GCIF,case
+		when flg_slry='0' then txn_amt end as FT_OTH_amt,
+		case
+		when flg_slry='1' then txn_amt end as FT_amt,
+		sum(calculated FT_OTH_amt) as FT_OTH_amt,sum(calculated FT_amt) as FT_amt
+from raw.FT_IB_DET_201606 as t1 left join raw.GCIF_PID(keep=GCIF PID) as t2 on t1.PID=t2.PID
+where GCIF IN(select GCIF from raw.EB_201606)
+group by gcif
+order by GCIF;
+quit;
+
+/****/
+data zz;
+set raw.AUTO_PMT_201606;
+run;
+
+proc sql;
+create table zz as
+select distinct PMT_CMP_JPN
+from raw.AUTO_PMT_201606
+where DRCR='D';
+quit;
+
+data q;
+a=.;b=.;output;
+a=2;b=2;output;run;
+data q;
+set q;
+ttl=a+b;
+ttl=sum(a,b);
+run;
+
+data Comp(drop=cum_ttl '給与_1M<'n '給与_1M>'n '給与_3M>'n '給与_10M>'n);
+merge Domestic_IB_OB(in=t1 keep=gcif PERI_INAMT_AVG_SAL PERI_INAMT_AVG_OTH)
+	salary(in=t2);
+by gcif;
+if t1;
+
+
+Delta=ave_ttl- PERI_INAMT_AVG_SAL;
+if Delta=. then check=0;
+else if Delta=0 then check=1;
+else if Delta>0 or Delta<0 then check=2;
+
+format PERI_INAMT_AVG_SAL comma20. Delta comma20;
+run;
+
+
+	proc sql;
+	create table test as 
+	select count(gcif) as G_cnt,count(distinct gcif) as Uni_g
+	from ft_ib;
+	quit;
+/**/
+
+
