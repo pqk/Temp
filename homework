@@ -1,0 +1,823 @@
+/*homework*/
+ods noproctitle;
+ods csvall path="\\ssosn1527\sas$\個人部門\リテール営業統轄部\output\個人\225273_Peter_Kirsch"
+body="No1_No18.csv";
+
+data EB_201606;
+set raw.EB_201606;run;
+
+/**********  No1  **********/
+title 'No1';
+proc means data=EB_201606 nonobs n /*nmiss*/ missing sum mean maxdec=0;
+var JPYCASA;run;
+
+/**********  No2  **********/
+title 'No2';
+proc means data=EB_201606 nonobs n /*nmiss*/  missing sum mean maxdec=0;
+var JPYCASA;
+class Stage;run;
+
+/*EDA*//*
+data a;
+set raw.EB_201606;
+where stage='';run;
+
+data a;
+set a;
+YR=year(dat_acct_open);
+Mo=month(dat_acct_open);
+run;
+
+proc freq;
+tables YR*MO /norow nocol nopercent nocum;
+run;*/
+
+/**********  No3  **********/
+title 'No3';
+proc means data=EB_201606 nonobs n /*nmiss*/  missing sum mean maxdec=0;
+var JPYCASA;
+class shukan_buten;run;
+
+
+/**********  No4  **********/
+data EB_ZOK_201606;
+merge  EB_201606(in=t1 keep=GCIF JPYCASA Stage)
+	   raw.SBL_ZOK_201606(in=t2 keep=GCIF sex age birth_D);
+by GCIF;
+if t1;
+length Age_Dist $10.;
+if age>=0 and age<=20 then Age_Dist='0:_0-20';
+else if age>=21 and age<=35 then Age_Dist='1:_21-35';
+else if age>=36 and age<=45 then Age_Dist='2:_36-45' ;
+else if age>=46 and age<=55 then Age_Dist='3:_46-55' ;
+else if age>=56 and age<=65 then Age_Dist='4:_56-65' ;
+else if age>=66 and age<=75 then Age_Dist='5:_66-75' ;
+else if age>=76 and age<=85 then Age_Dist='6:_76-85' ;
+else if age>=86 and age<=95 then Age_Dist='7:_86-95' ;
+else if age>=96 and age<=105 then Age_Dist='8:_96-105' ;
+else if age>=106 then Age_Dist='9:_106+' ;
+
+if age=. or sex='不明' then delete;
+run;
+
+/*EDA*//*
+proc freq;
+tables check / norow nopercent nocol; /*5 年齢と性別が欠損値*//*
+run;
+
+data a;
+set EB_ZOK_201606;
+where age=.;run; /*50,130 年齢の欠損値*//*
+data b;
+set EB_ZOK_201606;
+where sex='不明';run;/*136,308 性別の欠損値  >>48,510 性別と年齢の両方の欠損値*/
+
+title 'No4';
+proc sgpanel data=EB_ZOK_201606;
+panelby sex;
+rowaxis label="年齢分布";
+vbar Age_Dist / response=age stat=freq transparency=0.3;
+run;
+
+title1 '男性';
+proc means data=EB_ZOK_201606 nonobs n /*nmiss*/ missing sum mean maxdec=0;
+var JPYCASA;
+class Age_Dist;
+where sex='男性';run;
+
+title1 '女性';
+proc means data=EB_ZOK_201606 nonobs n /*nmiss*/ missing sum mean maxdec=0;
+var JPYCASA;
+class Age_Dist;
+where sex='女性'; run;
+title1;
+/* END No4*/
+
+/**********  No5  **********/
+data EB_YRMO;
+set EB_201606 (keep=GCIF JPYCASA dat_acct_open);
+YR=year(dat_Acct_open);
+MO=month(dat_Acct_open);
+format dat_Acct_open yymmn10.;
+run;
+
+/*EDA*//*
+proc freq;
+tables YR*Mo / norow nocol nopercent nocum;
+run;*/
+
+title 'No5';
+proc means data=EB_YRMO nonobs n /*nmiss*/ missing sum mean maxdec=0;
+var JPYCASA;
+class dat_Acct_open;
+run;
+/* END No5*/
+
+
+/**********  No6  **********/
+title 'No6';
+proc means data=EB_ZOK_201606 nonobs n missing p25 mean p75 std maxdec=0;
+var age;run;
+/* END No6*/
+
+/**********  No7  **********/
+/*EDA*//*
+proc freq data=EB_ZOK_201606;
+tables stage / norow nopercent nocol; /*27,039 性別と年齢の欠損値*//*
+run;*/
+
+title 'No7';
+proc means data=EB_ZOK_201606 nonobs n mean maxdec=0;
+var age;
+class stage;
+where stage^='';
+run;
+/* END No7*/
+
+
+/**********  No8  **********/
+proc sort data=ads.txn_ruiseki3 out=txn_ruiseki3(keep=Txn_YM PID GCIF Sales_Amt Fee Shnkbn2);
+by GCIF PID shnkbn2;
+run;
+
+/*EDA*//*
+proc sql;
+select count(distinct GCIF) as distinct,count(GCIF) as cnt
+from txn_ruiseki3;
+quit;
+
+proc freq data=txn_ruiseki3 ;
+tables shnkbn2 / norow nocol nopercent nocum;
+run;
+
+data a(drop=first last first1 last1 first2 last2);
+set txn_ruiseki3;
+by GCIF PID shnkbn2;
+first=first.GCIF;
+last=last.GCIF;
+if first then GCIF_cnt=0;
+GCIF_cnt+1;
+
+first1=first.PID;
+last1=last.PID;
+if first1 then PID_cnt=0;
+PID_cnt+1;
+
+first2=first.Shnkbn2;
+last2=last.Shnkbn2;
+if first2 then Shnkbn2_cnt=0;
+Shnkbn2_cnt+1;
+
+if GCIF_cnt^=PID_cnt then check=1; /*GCIF毎に重複PIDがあるかの確認*//*
+else check=0;
+run;*/
+
+data txn_ruiseki3;
+set txn_ruiseki3;
+if GCIF in (0000000000,9999999999) or Shnkbn2 in ('90_JPYTD','91_JPY2WK') then delete;
+if GCIF=. then do;
+	GCIF_flag=1;
+	GCIF=0; /*下記のProc sqlでカウントできる為、ヌルの場合に値を入力するべき。*/
+	end;
+else GCIF_flag=0; /*その他GCIFがないものを識別できる為、変数を作成。*/
+run;
+
+proc sql;
+create table No8 as
+select GCIF_flag,count(distinct GCIF) as CNT, sum(Sales_AMT) as '販売額'n, sum(fee) as '収益合計'n
+from txn_ruiseki3
+group by GCIF_flag;
+quit;
+
+proc format;
+value cust
+0='リスク商品取引の取引者数'n
+1='その他'n;
+run;
+
+title "No 8";
+footnote height=8pt "GCIFで判明できない為、その他区分では意味にのない「１」とカウント。";
+proc report data=No8 nowindows headline;
+column GCIF_flag CNT 販売額 収益合計;
+define GCIF_flag / group format=cust. descending;
+define CNT / '取引者数' group sum format=comma20.;
+define 販売額 /  group sum format=comma20.;
+define 収益合計 / group sum format=comma20.;
+run;
+/* END No8*/
+
+
+/**********  No9  **********/
+data txn_ruiseki3;
+set ads.txn_ruiseki3(keep=Txn_YM GCIF Sales_Amt Fee TXN_CHNL Shnkbn2);
+if GCIF in (0000000000,9999999999) or Shnkbn2 in ('90_JPYTD','91_JPY2WK') then delete;
+if GCIF=. then do;
+	GCIF_flag=1;
+	GCIF=0; /*下記のProc sqlでカウントできる為、ヌルの場合に値を入力するべき。*/
+	end;
+else GCIF_flag=0; /*その他GCIFがないものを識別できる為、変数を作成。*/
+run;
+
+/*EDA*//*
+proc freq data=txn_ruiseki3 ;
+tables TXN_CHNL / norow nocol nopercent nocum;
+run;
+
+proc sort data=txn_ruiseki3 out=txn_ruiseki3;
+by GCIF TXN_CHNL;
+run;*/
+
+proc sql;
+create table No9 as
+select GCIF_flag,TXN_CHNL, count(TXN_CHNL) as CNT,sum(Sales_AMT) as '販売額'n, sum(fee) as '収益合計'n
+from txn_ruiseki3
+group by GCIF_flag,TXN_CHNL;
+quit;
+
+proc format;
+value cust
+0='リスク商品取引の取引者数'n
+1='その他'n;
+run;
+
+title "No 9";
+footnote;
+proc report data=No9 nowindows headline;
+column GCIF_flag TXN_CHNL CNT 販売額 収益合計;
+define GCIF_flag / group format=cust. descending;
+define TXN_CHNL / group;
+define CNT / '取引者数' group sum format=comma20.;
+define 販売額 /  group sum format=comma20.;
+define 収益合計 / group sum format=comma20.;
+run;
+/* END No9*/
+
+
+/**********  No10  **********/
+data txn_ruiseki3;
+set ads.txn_ruiseki3(keep=Txn_YM GCIF Sales_Amt Fee TXN_CHNL Shnkbn2 );
+if GCIF in (0000000000,9999999999) or Shnkbn2 in ('90_JPYTD','91_JPY2WK') then delete;
+if GCIF=. then do;
+	GCIF_flag=1;
+	GCIF=0;  /*下記のProc sqlでカウントできる為、ヌルの場合に値を入力するべき。*/
+	end;
+else GCIF_flag=0; /*その他GCIFがないものを識別できる為、変数を作成。*/
+Year=substr(txn_YM,1,4);
+Month=substr(txn_YM,5,2);
+run;
+
+/*EDA*//*
+proc freq data=txn_ruiseki3;
+tables Month*Year / norow nocol nopercent nocum;
+run;
+
+proc sort data=txn_ruiseki3 out=txn_ruiseki3;
+by Year GCIF TXN_CHNL;
+run;*/
+
+proc sql;
+create table No10 as
+select GCIF_flag,Year,TXN_CHNL, count(TXN_CHNL) as CNT,sum(Sales_AMT) as '販売額'n, sum(fee) as '収益合計'n
+from txn_ruiseki3
+group by GCIF_flag,year,TXN_CHNL;
+quit;
+
+proc format;
+value cust
+0='リスク商品取引の取引者数'n
+1='その他'n;
+run;
+
+title "No 10";
+proc report data=No10 nowindows headline;
+column GCIF_flag TXN_CHNL Year CNT 販売額 収益合計;
+define GCIF_flag / group format=cust. descending;
+define TXN_CHNL / group;
+define Year / group;
+define CNT / '取引者数' group sum format=comma20.;
+define 販売額 /  group sum format=comma20.;
+define 収益合計 / group sum format=comma20.;
+run;
+
+/* END No10*/
+
+
+/**********  No11  **********/
+data txn_ruiseki3;
+set ads.txn_ruiseki3(keep=Txn_YM PID GCIF Sales_Amt Fee Shnkbn2);
+if GCIF in (0000000000,9999999999) or Shnkbn2 not in ('90_JPYTD','91_JPY2WK') then delete;
+if GCIF=. then do;
+	GCIF_flag=1;
+	GCIF=0;  /*下記のProc sqlでカウントできる為、ヌルの場合に値を入力するべき。*/
+	end;
+else GCIF_flag=0;  /*その他GCIFがないものを識別できる為、変数を作成。*/
+run;
+proc sort data=txn_ruiseki3;by GCIF PID shnkbn2;run;
+
+/*EDA*//*
+proc means data=ads.txn_ruiseki3 n sum maxdec=0;
+var Fee;
+class shnkbn2;
+run;*/
+
+proc sql;
+create table No11 as
+select GCIF_flag,count(distinct GCIF) as CNT, sum(Sales_AMT) as '販売額'n, sum(fee) as '収益合計'n
+from txn_ruiseki3
+group by GCIF_flag;
+quit;
+
+proc format;
+value cust
+0='ノンリスク商品取引の取引者数'n
+1='その他'n;
+run;
+
+title "No 11";
+footnote	height=8pt "* GCIFで判明できない為、その他区分では意味にのない「１」とカウント。"
+			"** ノンリスク商品では、収益はありません。";
+proc report data=No11 nowindows headline;
+column GCIF_flag CNT 販売額 収益合計;
+define GCIF_flag / group format=cust. descending;
+define CNT / '取引者数' group sum format=comma20.;
+define 販売額 /  group sum format=comma20.;
+define 収益合計 / group sum format=comma20.;
+run;
+/* END No11*/
+
+
+/**********  No12  **********/
+data txn_ruiseki3;
+set ads.txn_ruiseki3(keep=Txn_YM GCIF Sales_Amt Fee TXN_CHNL Shnkbn2);
+if GCIF in (0000000000,9999999999) or Shnkbn2 not in ('90_JPYTD','91_JPY2WK') then delete;
+if GCIF=. then do;
+	GCIF_flag=1;
+	GCIF=0; /*下記のProc sqlでカウントできる為、ヌルの場合に値を入力するべき。*/
+	end;
+else GCIF_flag=0;  /*その他GCIFがないものを識別できる為、変数を作成。*/
+run;
+proc sort data=txn_ruiseki3;by GCIF TXN_CHNL shnkbn2;run;
+
+/*EDA*//*
+proc freq data=txn_ruiseki3 ;
+tables TXN_CHNL / norow nocol nopercent nocum;
+run;*/
+
+proc sql;
+create table No12 as
+select GCIF_flag,TXN_CHNL, count(TXN_CHNL) as CNT,sum(Sales_AMT) as '販売額'n, sum(fee) as '収益合計'n
+from txn_ruiseki3
+group by GCIF_flag,TXN_CHNL;
+quit;
+
+proc format;
+value cust
+0='ノンリスク商品取引の取引者数'n
+1='その他'n;
+run;
+
+title "No 12";
+footnote	height=8pt "* ノンリスク商品では、収益はありません。";
+proc report data=No12 nowindows headline;
+column GCIF_flag TXN_CHNL CNT 販売額 収益合計;
+define GCIF_flag / group format=cust. descending;
+define TXN_CHNL / group;
+define CNT / '取引者数' group sum format=comma20.;
+define 販売額 /  group sum format=comma20.;
+define 収益合計 / group sum format=comma20.;
+run;
+/* END No12*/
+
+/**********  No13  **********/
+data txn_ruiseki3;
+set ads.txn_ruiseki3(keep=Txn_YM GCIF Sales_Amt Fee TXN_CHNL Shnkbn2 );
+if GCIF in (0000000000,9999999999) or Shnkbn2 not in ('90_JPYTD','91_JPY2WK') then delete;
+if GCIF=. then do;
+	GCIF_flag=1;
+	GCIF=0; /*下記のProc sqlでカウントできる為、ヌルの場合に値を入力するべき。*/
+	end;
+else GCIF_flag=0;  /*その他GCIFがないものを識別できる為、変数を作成。*/
+Year=substr(txn_YM,1,4);
+Month=substr(txn_YM,5,2);
+run;
+
+/*EDA*//*
+proc freq data=txn_ruiseki3;
+tables Month*Year / norow nocol nopercent nocum;
+run;
+
+proc sort data=txn_ruiseki3 out=txn_ruiseki3;
+by Year GCIF TXN_CHNL;
+run;*/
+
+proc sql;
+create table No13 as
+select GCIF_flag,Year,TXN_CHNL, count(TXN_CHNL) as CNT,sum(Sales_AMT) as '販売額'n, sum(fee) as '収益合計'n
+from txn_ruiseki3
+group by GCIF_flag,year,TXN_CHNL;
+quit;
+
+proc format;
+value cust
+0='ノンリスク商品取引の取引者数'n
+1='その他'n;
+run;
+
+title "No 13";
+footnote;
+proc report data=No13 nowindows headline;
+column GCIF_flag TXN_CHNL Year CNT 販売額 収益合計;
+define GCIF_flag / group format=cust. descending;
+define TXN_CHNL / group;
+define Year / group;
+define CNT / '取引者数' group sum format=comma20.;
+define 販売額 /  group sum format=comma20.;
+define 収益合計 / group sum format=comma20.;
+run;
+/* END No13*/
+
+
+/**********  No14  **********/
+proc sql;
+create table ATM_DETAILS_201606 as
+select JSKYM,GCIF,coalesce(t1.PID,t2.PID) as PID,*,case
+		when missing(GCIF) then 1 /* GCIF無し顧客 */
+		when not missing(GCIF) then 0 end as GCIF_Flag	/* GCIF有り顧客 */
+from raw.ATM_DETAILS_201606 as t1 left join raw.GCIF_PID(keep=GCIF PID) as t2 on t1.PID=t2.PID
+order by GCIF, PID;
+quit;
+
+/*EDA*//*
+proc sort data=ATM_DETAILS_201606 out=test;by txn_Amt;
+*where txn_type='C';
+where txn_type='D';
+run;
+
+proc means data=ATM_DETAILS_201606 mean;
+var txn_amt;
+class channel;
+run;
+
+proc freq;
+tables txn_type /norow nocol nopercent nocum;run;*/
+
+proc sql;
+create table No14 as
+select count(distinct GCIF) as Unique,count(PID) as Cnt,sum(Txn_Amt) as Trx_AMT
+from ATM_DETAILS_201606
+where txn_type='C' /*CREDIT 入金*/ and GCIF_Flag=0
+group by GCIF;
+quit;
+
+title "No 14";
+footnote	height=8pt "GCIF無し顧客を除く。";
+proc report data=No14 nowindows headline;
+column Unique Cnt Trx_AMT;
+define Unique / '利用者数' group sum format=comma20.;
+define CNT / '平均利用回数' group mean format=5.2;
+define Trx_AMT / '平均利用金額' group mean format=comma20.;
+run;
+/* END No14*/
+
+
+/**********  No15  **********/
+proc sql;
+create table ATM_DETAILS_201606 as
+select JSKYM,GCIF,coalesce(t1.PID,t2.PID) as PID,*,case
+		when missing(GCIF) then 1 /* GCIF無し顧客 */
+		when not missing(GCIF) then 0 end as GCIF_Flag	/* GCIF有り顧客 */
+from raw.ATM_DETAILS_201606 as t1 left join raw.GCIF_PID(keep=GCIF PID) as t2 on t1.PID=t2.PID
+order by GCIF,PID;
+quit;
+
+/*EDA*//*
+proc sort data=ATM_DETAILS_201606 out=test;by txn_Amt;
+*where txn_type='C';
+where txn_type='D';
+run;
+
+proc means data=ATM_DETAILS_201606 mean;
+var txn_amt;
+class channel;
+run;
+
+proc freq;
+tables txn_type /norow nocol nopercent nocum;run;*/
+
+proc sql;
+create table No15 as
+select count(distinct GCIF) as Unique,count(PID) as Cnt,sum(Txn_Amt) as Trx_AMT
+from ATM_DETAILS_201606
+where txn_type='D' /*DEBIT 出金*/ and GCIF_Flag=0
+group by GCIF;
+quit;
+
+title "No 15";
+footnote	height=8pt "GCIF無し顧客を除く。";
+proc report data=No15 nowindows headline;
+column Unique Cnt Trx_AMT;
+define Unique / '利用者数' group sum format=comma20.;
+define CNT / '平均利用回数' group mean format=5.2;
+define Trx_AMT / '平均利用金額' group mean format=comma20.;
+run;
+/* END No15*/
+
+
+/**********  No16  **********/
+proc sql;
+create table FT_IB_DET_201606 as
+select GCIF,coalesce(t1.PID,t2.PID) as PID,*
+from raw.FT_IB_DET_201606 as t1 left join raw.GCIF_PID(keep=GCIF PID) as t2 on t1.PID=t2.PID
+order by GCIF,PID,SND_CODE;
+quit;
+
+/*EDA*//*
+proc freq data=FT_IB_DET_201606;
+tables SND_BK_BR /norow nocol nocum nopercent;
+run;
+
+proc sql;
+select SND_BK_BR,count(SND_BK_BR) as cnt
+from FT_IB_DET_201606
+group by SND_BK_BR
+order by calculated cnt desc;quit;
+
+proc freq data=FT_IB_DET_201606;
+tables txn_type /norow nocol nocum nopercent;
+run;
+
+proc sort data=FT_IB_DET_201606 out=a;by PID;run;*/
+
+
+proc sql;
+create table No16 as
+select count(distinct GCIF) as Unique,count(PID) as Cnt,sum(Txn_Amt) as Trx_AMT
+from FT_IB_DET_201606
+group by GCIF;
+quit;
+
+title "No 16";
+footnote;
+proc report data=No16 nowindows headline;
+column Unique Cnt Trx_AMT;
+define Unique / '利用者数' group sum format=comma20.;
+define CNT / '平均利用回数' group mean format=5.2;
+define Trx_AMT / '平均利用金額' group mean format=comma20.;
+run;
+/* END No16*/
+
+
+/**********  No17  **********/
+proc sql;
+create table FT_OB_DET_201606 as
+select GCIF,coalesce(t1.PID,t2.PID) as PID,*
+from raw.FT_OB_DET_201606 as t1 left join raw.GCIF_PID(keep=GCIF PID) as t2 on t1.PID=t2.PID
+order by GCIF,PID,Txn_Date;
+quit;
+
+
+/*EDA*//*
+proc freq data=FT_OB_DET_201606 ;
+tables txn_type /norow nocol nocum nopercent;
+run;
+
+proc sql;
+select txn_type,count(txn_type) as cnt,sum(txn_amt) as TTL
+from FT_OB_DET_201606 
+group by txn_type;quit;
+
+proc sort data=FT_OB_DET_201606 out=a;by txn_amt;run;
+
+data test(keep=GCIF PID Txn_amt Txn_Date Txn_type Check);
+set FT_OB_DET_201606;
+if txn_type='Kumimodoshi' or  txn_type='Transfer' then check=1;
+else if txn_type='Fee' or  txn_type='CashBack' then check=2;
+else check=0;run;
+proc sort data=test;by GCIF PID txn_date Txn_type;run;
+
+proc sql;
+create table test1 as
+select GCIF,check,case
+		when check=1 then sum(txn_amt)
+		else 0 end as _1_SUM,
+		case
+		when check=2 then sum(txn_amt)
+		else 0 end as _2_SUM
+from test
+group by GCIF,check;
+quit;
+proc sort data=test1;by check _1_SUM;run;
+data sample;
+set test1;
+if check=1 and _1_SUM<0;run;
+proc sort data=sample;by GCIF;run;
+
+data test2;
+merge sample(in=t1 keep=GCIF)
+	  FT_OB_DET_201606(in=t2);
+by GCIF;
+if t1;
+run;*/
+
+
+proc sql;
+create table No17 as
+select GCIF,count(distinct GCIF) as Unique,count(PID) as Cnt,sum(Txn_Amt) as Trx_AMT
+from FT_OB_DET_201606
+where not missing(GCIF) and txn_type not in ('Kumimodoshi','Fee','CashBack')
+group by GCIF;
+quit;
+
+title "No 17";
+footnote	height=8pt "* GCIF無し顧客を除く。"
+			"** TXN_TYPEは「Transfer」のみとカウント。";
+proc report data=No17 nowindows headline;
+column Unique Cnt Trx_AMT;
+define Unique / '利用者数' group sum format=comma20.;
+define CNT / '平均利用回数' group mean format=5.2;
+define Trx_AMT / '平均利用金額' group mean format=comma20.;
+run;
+/* END No17*/
+
+
+/**********  No18  **********/
+proc sql;
+create table PD_201606 as
+select JSKYM,GCIF,coalesce(t1.PID,t2.PID) as PID,*
+from raw.PD_201606 as t1 left join raw.GCIF_PID(keep=GCIF PID) as t2 on t1.PID=t2.PID
+order by GCIF,PID;
+quit;
+
+/*EDA*//*
+data test;
+set PD_201606;
+by GCIF;
+if first.GCIF then First=1;
+else First=0;
+run;
+data test1(keep=GCIF); /*141 GCIFはPID一つ以上にPDへログイン履歴あり。*//*
+set PD_201606;
+by GCIF;
+if first.GCIF then First=1;
+else First=0;
+if First=0;
+run;
+data test2;
+merge test1(in=t1)
+	  PD_201606(in=t2);
+by GCIF;
+if t1;
+run;*/
+
+proc sql;
+create table temp as
+select GCIF,
+max(pr_1m_lgn_f) as pr_1m_lgn_f,
+sum(pr_1m_lgn_days) as pr_1m_lgn_days,
+sum(pr_1m_lgn_n) as pr_1m_lgn_n,
+max(pr_3m_lgn_f) as pr_3m_lgn_f,
+sum(pr_3m_lgn_days) as pr_3m_lgn_days,
+sum(pr_3m_lgn_n) as pr_3m_lgn_n,
+max(pr_6m_lgn_f) as pr_6m_lgn_f,
+sum(pr_6m_lgn_days) as pr_6m_lgn_days,
+sum(pr_6m_lgn_n) as pr_6m_lgn_n,
+max(pr_12m_lgn_f) as pr_12m_lgn_f,
+sum(pr_12m_lgn_days) as pr_12m_lgn_days,
+sum(pr_12m_lgn_n) as pr_12m_lgn_n
+from PD_201606
+group by GCIF;
+quit;
+
+proc transpose data=Temp out=temp1;
+var
+pr_1m_lgn_f
+pr_1m_lgn_days
+pr_1m_lgn_n
+pr_3m_lgn_f
+pr_3m_lgn_days
+pr_3m_lgn_n
+pr_6m_lgn_f
+pr_6m_lgn_days
+pr_6m_lgn_n
+pr_12m_lgn_f
+pr_12m_lgn_days
+pr_12m_lgn_n;
+by GCIF;
+run;
+
+data Temp1;
+set Temp1;
+if substr(_Name_,4,2)=12 then do;
+	Month='12';
+	_Name_='pr_'||substr(_Name_,8);end;
+else do;
+	Month=substr(_Name_,4,1);
+	_Name_='pr_'||substr(_Name_,7);end;
+run;
+
+proc sort data=temp1;by GCIF Month;run;
+proc transpose data=Temp1 out=No18(drop=_NAME_);
+var col1;
+id _name_;
+by GCIF Month;
+run;
+
+proc format;
+value $PD_Mo
+'1'='1: 201606月'n
+'3'='2: 過去3ヵ月合計'n
+'6'='3: 過去6ヵ月合計'n
+'12'='4: 過去12ヵ月合計'n;
+run;
+
+title "No 18";
+footnote;
+proc report data=No18 nowindows headline;
+column Month pr_lgn_f pr_lgn_n pr_lgn_days;
+define Month / group format=$PD_Mo.;
+define pr_lgn_f / 'PDログインの利用者数' group sum format=comma20.;
+define pr_lgn_n /  '平均ログイン回数' group mean format=5.2;
+define pr_lgn_days / '平均ログイン日数' group mean format=5.2;
+run;
+
+/* END No18*/
+
+/*txn amt*/
+
+
+/*** Initial Date ***/
+%let ST='1jan2008'd; 	/*--> s_cut=1*/
+       
+data _null_;		/*n= months elapsed from s_cut=1 to today() nはs_cut=1～本日の間の経過月数*/
+        call symput ("n",strip(intck("month",&ST-1,intnx('day',intnx('month',today(),0),-1)))) ;
+run;
+
+%put %nrstr(&n =) &n;/* Check */
+
+data _null_;	/*creates monthly macvar series from &ST to today()*/
+	%macro YM1;
+		%do i= 0 %to &n ;
+			call symput("yymm&i" ,put(intnx("month",&ST-1,%eval(&i),"end"),yymmdd4.));
+		%end;
+	%mend YM1;
+	%YM1 ;
+run;
+
+%macro YM2 ; /*output to log all yymm&i macvar*/
+	%do i= 0 %to &n ;
+		%put yymm&i = &&yymm&i;
+	%end ;
+%mend YM2;
+%YM2 ;
+
+%let s_cut = 1 ;  	/*YYMM1 200801  */
+%let e_cut =102;		/*YYMM102 201606  */
+
+%macro eda;
+%do i=&s_cut %to &e_cut;
+
+proc sort data=raw.ATM_DETAILS_20&&yymm&i(keep=JSKYM PID txn_amt where=(txn_amt<0)) 
+			out=ATM_&&yymm&i;
+by txn_amt;run;
+
+proc sql;
+create table ATM_&&yymm&i as
+select txn_amt,count(txn_amt) as CNT
+from ATM_&&yymm&i
+group by txn_amt;
+quit;
+
+proc sort data=ATM_&&yymm&i;by descending cnt;run;
+
+data ATM_&&yymm&i;
+set ATM_&&yymm&i;
+YM=&&yymm&i;
+run;
+
+%end;
+
+data ATM_trx;
+set
+%do i =&s_cut %to &e_cut %by 1;
+
+	ATM_&&yymm&i
+	
+%end ;
+;
+run ;
+%mend eda;
+
+%eda
+
+proc sort data=ATM_trx;by txn_amt;run;
+proc transpose data=ATM_trx out=a(drop=_NAME_);
+var cnt;
+id YM;
+by txn_AMT;
+run;
+
+
+proc export data = work.a
+OUTFILE= "\\ssosn1527\sas$\個人部門\リテール営業統轄部\output\個人\225273_Peter_Kirsch\ATM_trx.csv"
+dbms = csv replace ;
+run ;
